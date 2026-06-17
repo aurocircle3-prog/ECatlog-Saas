@@ -1026,9 +1026,9 @@ function downloadSelectedCsv() {
     const f = __itemMasterSchema[`field${i}`];
     if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, name: f.name });
   }
-  const headers = ['Item Code', 'Item Name', ...customCols.map(c => c.name), 'Active'];
+  const headers = ['Item Code', 'Item Name', 'Image Name', 'WSP', ...customCols.map(c => c.name), 'Active'];
   const rows = items.map(p => [
-    p.itemNo, p.productName||'',
+    p.itemNo, p.productName||'', p.imageName||'', p.salePrice||0,
     ...customCols.map(c => p[c.key]||''),
     p.active === false ? 'No' : 'Yes'
   ]);
@@ -1432,9 +1432,9 @@ function downloadItemsCsv() {
     const f = schema[`field${i}`];
     if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, name: f.name });
   }
-  const headers = ['Item Code','Item Name','Category','Selling Price','Min Qty','Unit', ...customCols.map(c => c.name), 'Active'];
+  const headers = ['Item Code','Item Name','Image Name','WSP', ...customCols.map(c => c.name), 'Active'];
   const rows = __itemMasterData.map(p => [
-    p.itemNo, p.productName||'', p.category||'', p.salePrice||0, p.minQty||1, p.unit||'Pcs',
+    p.itemNo, p.productName||'', p.imageName||'', p.salePrice||0,
     ...customCols.map(c => p[c.key]||''),
     p.active === false ? 'No' : 'Yes'
   ]);
@@ -1655,7 +1655,7 @@ function loadFieldSettings() {
     </div>
     <div class="card">
       <div style="margin-bottom:12px;padding:10px 14px;background:#f0f4ff;border-radius:8px;font-size:12px;color:#2e3192;line-height:1.7;">
-        <b>Fixed fields (always present, cannot be changed):</b> Item Code · Item Name · Image Name · Selling Price · Min Qty · Unit<br>
+        <b>Fixed fields (always present, cannot be changed):</b> Item Code · Item Name · Image Name · WSP<br>
         <b>Custom fields below</b> — enable a field, give it a name (e.g. "MRP", "Colour", "Size"), and use that exact name as a column header in your CSV.
       </div>
       <div class="tbl-wrap">
@@ -1722,7 +1722,7 @@ function saveFieldSettings() {
 
 function downloadCsvTemplate() {
   const schema = window.__fieldSchema || {};
-  const fixed = ['Item Code', 'Item Name', 'Image Name', 'Active'];
+  const fixed = ['Item Code', 'Item Name', 'Image Name', 'WSP', 'Active'];
   const custom = [];
   for (let i = 1; i <= 13; i++) {
     const f = schema[`field${i}`];

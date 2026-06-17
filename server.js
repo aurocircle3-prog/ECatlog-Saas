@@ -8,81 +8,23 @@ const { v4: uuid } = require('uuid');
 const { parse } = require('csv-parse/sync');
 const XLSX      = require('xlsx');
 const cors      = require('cors');
-const low       = require('lowdb');
-const FileSync  = require('lowdb/adapters/FileSync');
 
 const app = express();
 const PORT       = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'wholesale-reseller-secret-2025';
+const MONGO_URI  = process.env.MONGO_URI || '';
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ── DB ────────────────────────────────────────────────────────────────────
-const dbDir = path.join(__dirname, 'db');
-if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-const adapter = new FileSync(path.join(dbDir, 'db.json'));
-const db = low(adapter);
-db.defaults({ users: [], catalogs: [], products: [], orders: [], wholesaleOrders: [] }).write();
-
-const DB = {
-  findUser(q)        { return db.get('users').find(q).value(); },
-  findUsers(q = {})  { return db.get('users').filter(q).value(); },
-  createUser(u)      { db.get('users').push(u).write(); },
-  updateUser(q, u)   { db.get('users').find(q).assign(u).write(); },
-
-  findCatalog(q)        { return db.get('catalogs').find(q).value(); },
-  findCatalogs(q = {})  { return db.get('catalogs').filter(q).value(); },
-  createCatalog(c)      { db.get('catalogs').push(c).write(); },
-  updateCatalog(q, u)   { db.get('catalogs').find(q).assign(u).write(); },
-
-  findProduct(q)        { return db.get('products').find(q).value(); },
-  findProducts(q = {})  { return db.get('products').filter(q).value(); },
-  createProduct(p)      { db.get('products').push(p).write(); },
-  bulkCreateProducts(arr) { arr.forEach(p => db.get('products').push(p).write()); },
-  updateProduct(q, u)   { db.get('products').find(q).assign(u).write(); },
-  deleteProducts(q)     { db.get('products').remove(q).write(); },
-
-  findOrder(q)        { return db.get('orders').find(q).value(); },
-  findOrders(q = {})  { return db.get('orders').filter(q).value(); },
-  createOrder(o)       { db.get('orders').push(o).write(); },
-  updateOrder(q, u)    { db.get('orders').find(q).assign(u).write(); },
-
-  findWholesaleOrders(q = {}) { return db.get('wholesaleOrders').filter(q).value(); },
-  createWholesaleOrder(o)     { db.get('wholesaleOrders').push(o).write(); },
-};
-
-// ── SEED ADMIN ────────────────────────────────────────────────────────────
-function seedAdmin() {
-  const users = db.get('users').value();
-  if (users.length === 0) {
-    const admin = {
-      id: uuid(), role: 'admin', userId: 'admin', firmName: 'Platform Admin',
-      contactPerson: 'Admin', email: 'admin@platform.local',
-      password: bcrypt.hashSync('admin123', 10),
-      slug: null, wholesalerId: null, status: 'active',
-      createdAt: new Date().toISOString(),
-    };
-    db.get('users').push(admin).write();
-    console.log('Seeded admin user (userId: admin / password: admin123)');
-  }
-}
-seedAdmin();
-
 // ── HELPERS ───────────────────────────────────────────────────────────────
 function slugify(s) {
   return String(s || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').substring(0, 60) || 'firm';
 }
-function uniqueSlug(base) {
-  let slug = slugify(base);
-  let n = 1;
-  while (DB.findUser({ slug })) { slug = `${slugify(base)}-${n}`; n++; }
-  return slug;
-}
 function genOrderNo(prefix) {
   const d = new Date();
-  return `${prefix}-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+  return `${prefix}-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
 }
 function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 
@@ -92,544 +34,553 @@ function defaultFieldSchema() {
     schema[`field${i}`] = {
       name: i === 1 ? 'MRP' : '',
       type: i === 1 ? 'number' : 'text',
-      required: false,
-      decimals: i === 1 ? 2 : 0,
-      enabled: i <= 10,
+      required: false, decimals: i === 1 ? 2 : 0, enabled: i <= 10,
     };
   }
   return schema;
 }
 
+function safeUser(u) {
+  if (!u) return u;
+  const { password, _id, __v, ...rest } = u;
+  return rest;
+}
+
+// ── DB LAYER ──────────────────────────────────────────────────────────────
+let DB;
+
+async function initMongoDB() {
+  const mongoose = require('mongoose');
+  await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
+  console.log('Connected to MongoDB Atlas');
+
+  const anySchema = new mongoose.Schema({}, { strict: false, versionKey: false });
+  const clean = doc => { if (!doc) return null; const o = doc.toObject ? doc.toObject() : {...doc}; delete o._id; return o; };
+  const cleanArr = arr => arr.map(d => { const o = d.toObject ? d.toObject() : {...d}; delete o._id; return o; });
+
+  const User    = mongoose.models.User    || mongoose.model('User',    anySchema);
+  const Cat     = mongoose.models.Cat     || mongoose.model('Cat',     anySchema);
+  const Product = mongoose.models.Product || mongoose.model('Product', anySchema);
+  const Order   = mongoose.models.Order   || mongoose.model('Order',   anySchema);
+  const WOrder  = mongoose.models.WOrder  || mongoose.model('WOrder',  anySchema);
+
+  DB = {
+    findUser:   q => User.findOne(q).lean().then(d => d ? (delete d._id, d) : null),
+    findUsers:  (q={}) => User.find(q).lean().then(arr => arr.map(d => { delete d._id; return d; })),
+    createUser: u => new User(u).save().then(() => u),
+    updateUser: (q, u) => User.updateOne(q, { $set: u }),
+
+    findCatalog:   q => Cat.findOne(q).lean().then(d => d ? (delete d._id, d) : null),
+    findCatalogs:  (q={}) => Cat.find(q).lean().then(arr => arr.map(d => { delete d._id; return d; })),
+    createCatalog: c => new Cat(c).save().then(() => c),
+    updateCatalog: (q, u) => Cat.updateOne(q, { $set: u }),
+
+    findProduct:   q => Product.findOne(q).lean().then(d => d ? (delete d._id, d) : null),
+    findProducts:  (q={}) => Product.find(q).lean().then(arr => arr.map(d => { delete d._id; return d; })),
+    createProduct: p => new Product(p).save().then(() => p),
+    bulkCreateProducts: arr => Product.insertMany(arr),
+    updateProduct: (q, u) => Product.updateOne(q, { $set: u }),
+    deleteProducts: q => Product.deleteMany(q),
+
+    findOrder:   q => Order.findOne(q).lean().then(d => d ? (delete d._id, d) : null),
+    findOrders:  (q={}) => Order.find(q).lean().then(arr => arr.map(d => { delete d._id; return d; })),
+    createOrder: o => new Order(o).save().then(() => o),
+    updateOrder: (q, u) => Order.updateOne(q, { $set: u }),
+
+    findWholesaleOrders: (q={}) => WOrder.find(q).lean().then(arr => arr.map(d => { delete d._id; return d; })),
+    createWholesaleOrder: o => new WOrder(o).save().then(() => o),
+  };
+}
+
+function initLowDB() {
+  const low      = require('lowdb');
+  const FileSync = require('lowdb/adapters/FileSync');
+  const dbDir    = path.join(__dirname, 'db');
+  if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+  const db = low(new FileSync(path.join(dbDir, 'db.json')));
+  db.defaults({ users: [], catalogs: [], products: [], orders: [], wholesaleOrders: [] }).write();
+  console.log('Using lowdb (local JSON database)');
+
+  const wrap = v => Promise.resolve(v);
+  DB = {
+    findUser:   q => wrap(db.get('users').find(q).value() || null),
+    findUsers:  (q={}) => wrap(db.get('users').filter(q).value()),
+    createUser: u => { db.get('users').push(u).write(); return wrap(u); },
+    updateUser: (q, u) => { db.get('users').find(q).assign(u).write(); return wrap(null); },
+
+    findCatalog:   q => wrap(db.get('catalogs').find(q).value() || null),
+    findCatalogs:  (q={}) => wrap(db.get('catalogs').filter(q).value()),
+    createCatalog: c => { db.get('catalogs').push(c).write(); return wrap(c); },
+    updateCatalog: (q, u) => { db.get('catalogs').find(q).assign(u).write(); return wrap(null); },
+
+    findProduct:   q => wrap(db.get('products').find(q).value() || null),
+    findProducts:  (q={}) => wrap(db.get('products').filter(q).value()),
+    createProduct: p => { db.get('products').push(p).write(); return wrap(p); },
+    bulkCreateProducts: arr => { arr.forEach(p => db.get('products').push(p).write()); return wrap(null); },
+    updateProduct: (q, u) => { db.get('products').find(q).assign(u).write(); return wrap(null); },
+    deleteProducts: q => { db.get('products').remove(q).write(); return wrap(null); },
+
+    findOrder:   q => wrap(db.get('orders').find(q).value() || null),
+    findOrders:  (q={}) => wrap(db.get('orders').filter(q).value()),
+    createOrder: o => { db.get('orders').push(o).write(); return wrap(o); },
+    updateOrder: (q, u) => { db.get('orders').find(q).assign(u).write(); return wrap(null); },
+
+    findWholesaleOrders: (q={}) => wrap(db.get('wholesaleOrders').filter(q).value()),
+    createWholesaleOrder: o => { db.get('wholesaleOrders').push(o).write(); return wrap(o); },
+  };
+}
+
+async function seedAdmin() {
+  const users = await DB.findUsers({ role: 'admin' });
+  if (!users.length) {
+    await DB.createUser({
+      id: uuid(), role: 'admin', userId: 'admin', firmName: 'Platform Admin',
+      contactPerson: 'Admin', email: 'admin@platform.local',
+      password: bcrypt.hashSync('admin123', 10),
+      slug: null, wholesalerId: null, status: 'active',
+      createdAt: new Date().toISOString(),
+    });
+    console.log('Seeded admin user (userId: admin / password: admin123)');
+  }
+}
+
+// ── MIDDLEWARE ────────────────────────────────────────────────────────────
 function auth(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1] || req.query.token;
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   try { req.user = jwt.verify(token, JWT_SECRET); next(); }
   catch { res.status(401).json({ error: 'Invalid or expired token' }); }
 }
-function adminOnly(req, res, next) {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  next();
-}
-function wholesalerOnly(req, res, next) {
-  if (req.user.role !== 'wholesaler') return res.status(403).json({ error: 'Wholesaler only' });
-  next();
-}
-function resellerOnly(req, res, next) {
+const adminOnly      = (req,res,next) => req.user.role==='admin'      ? next() : res.status(403).json({error:'Admin only'});
+const wholesalerOnly = (req,res,next) => req.user.role==='wholesaler' ? next() : res.status(403).json({error:'Wholesaler only'});
+const resellerOnly   = (req,res,next) => req.user.role==='reseller'   ? next() : res.status(403).json({error:'Reseller only'});
+
+async function approvedResellerOnly(req, res, next) {
   if (req.user.role !== 'reseller') return res.status(403).json({ error: 'Reseller only' });
-  next();
-}
-function approvedResellerOnly(req, res, next) {
-  if (req.user.role !== 'reseller') return res.status(403).json({ error: 'Reseller only' });
-  const user = DB.findUser({ id: req.user.id });
-  if (!user || user.status !== 'approved') {
-    return res.status(403).json({ error: 'Your account is pending wholesaler approval. You cannot build a catalog yet.' });
-  }
+  const user = await DB.findUser({ id: req.user.id });
+  if (!user || user.status !== 'approved') return res.status(403).json({ error: 'Your account is pending wholesaler approval.' });
   next();
 }
 
-function safeUser(u) { if (!u) return u; const { password, ...rest } = u; return rest; }
+function uniqueSlug(base, existingUsers) {
+  let slug = slugify(base), n = 1;
+  while (existingUsers.find(u => u.slug === slug)) { slug = `${slugify(base)}-${n}`; n++; }
+  return slug;
+}
 
 // ── AUTH ──────────────────────────────────────────────────────────────────
-app.post('/api/login', (req, res) => {
-  const { userId, password } = req.body;
-  if (!userId || !password) return res.status(400).json({ error: 'User ID and password required' });
-  const all = db.get('users').value();
-  const user = all.find(u => (u.userId || '').toLowerCase() === userId.toLowerCase());
-  if (!user || !bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Invalid user ID or password' });
-  const token = jwt.sign({ id: user.id, role: user.role, userId: user.userId, firmName: user.firmName }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: safeUser(user) });
-});
-
-// Register: role wholesaler (self-serve, auto-approved) or reseller (needs slug, status pending)
-app.post('/api/register', (req, res) => {
-  const { userId, password, firmName, contactPerson, email, role, wholesalerSlug } = req.body;
-  if (!userId || !password || !firmName || !contactPerson || !email || !role) {
-    return res.status(400).json({ error: 'All required fields must be filled' });
-  }
-  if (!['wholesaler', 'reseller'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
-  if (DB.findUser({ userId })) return res.status(400).json({ error: 'User ID already taken' });
-
-  if (role === 'wholesaler') {
-    const slug = uniqueSlug(firmName);
-    const user = {
-      id: uuid(), role: 'wholesaler', userId, firmName, contactPerson, email,
-      password: bcrypt.hashSync(password, 10), slug, wholesalerId: null,
-      status: 'active', createdAt: new Date().toISOString(),
-    };
-    DB.createUser(user);
+app.post('/api/login', async (req, res) => {
+  try {
+    const { userId, password } = req.body;
+    if (!userId || !password) return res.status(400).json({ error: 'User ID and password required' });
+    const all = await DB.findUsers();
+    const user = all.find(u => (u.userId||'').toLowerCase() === userId.toLowerCase());
+    if (!user || !bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Invalid user ID or password' });
     const token = jwt.sign({ id: user.id, role: user.role, userId: user.userId, firmName: user.firmName }, JWT_SECRET, { expiresIn: '7d' });
-    return res.json({ token, user: safeUser(user), signupLink: `/w/${slug}/signup` });
-  }
-
-  // reseller
-  if (!wholesalerSlug) return res.status(400).json({ error: 'wholesalerSlug is required for reseller registration' });
-  const wholesaler = DB.findUser({ slug: wholesalerSlug, role: 'wholesaler' });
-  if (!wholesaler) return res.status(404).json({ error: 'Wholesaler not found for this signup link' });
-  const user = {
-    id: uuid(), role: 'reseller', userId, firmName, contactPerson, email,
-    password: bcrypt.hashSync(password, 10), slug: null, wholesalerId: wholesaler.id,
-    status: 'pending', createdAt: new Date().toISOString(),
-  };
-  DB.createUser(user);
-  const token = jwt.sign({ id: user.id, role: user.role, userId: user.userId, firmName: user.firmName }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: safeUser(user) });
+    res.json({ token, user: safeUser(user) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/me', auth, (req, res) => {
-  const user = DB.findUser({ id: req.user.id });
-  if (!user) return res.status(401).json({ error: 'Session expired' });
-  res.json(safeUser(user));
+app.post('/api/register', async (req, res) => {
+  try {
+    const { userId, password, firmName, contactPerson, email, role, wholesalerSlug } = req.body;
+    if (!userId || !password || !firmName || !contactPerson || !email || !role)
+      return res.status(400).json({ error: 'All required fields must be filled' });
+    if (!['wholesaler','reseller'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+    if (await DB.findUser({ userId })) return res.status(400).json({ error: 'User ID already taken' });
+
+    if (role === 'wholesaler') {
+      const allUsers = await DB.findUsers();
+      const slug = uniqueSlug(firmName, allUsers);
+      const user = { id: uuid(), role:'wholesaler', userId, firmName, contactPerson, email,
+        password: bcrypt.hashSync(password,10), slug, wholesalerId:null, status:'active', createdAt:new Date().toISOString() };
+      await DB.createUser(user);
+      const token = jwt.sign({ id:user.id, role:user.role, userId:user.userId, firmName:user.firmName }, JWT_SECRET, { expiresIn:'7d' });
+      return res.json({ token, user: safeUser(user), signupLink: `/w/${slug}/signup` });
+    }
+
+    if (!wholesalerSlug) return res.status(400).json({ error: 'wholesalerSlug required for reseller registration' });
+    const wholesaler = await DB.findUser({ slug: wholesalerSlug, role: 'wholesaler' });
+    if (!wholesaler) return res.status(404).json({ error: 'Wholesaler not found for this signup link' });
+    const user = { id: uuid(), role:'reseller', userId, firmName, contactPerson, email,
+      password: bcrypt.hashSync(password,10), slug:null, wholesalerSlug, wholesalerId:wholesaler.id,
+      status:'pending', createdAt:new Date().toISOString() };
+    await DB.createUser(user);
+    const token = jwt.sign({ id:user.id, role:user.role, userId:user.userId, firmName:user.firmName }, JWT_SECRET, { expiresIn:'7d' });
+    res.json({ token, user: safeUser(user) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Resolve a wholesaler by slug (for the reseller signup page)
-app.get('/api/wholesalers/by-slug/:slug', (req, res) => {
-  const w = DB.findUser({ slug: req.params.slug, role: 'wholesaler' });
-  if (!w) return res.status(404).json({ error: 'Not found' });
-  res.json({ id: w.id, firmName: w.firmName, slug: w.slug });
+app.get('/api/me', auth, async (req, res) => {
+  try {
+    const user = await DB.findUser({ id: req.user.id });
+    if (!user) return res.status(401).json({ error: 'Session expired' });
+    res.json(safeUser(user));
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── WHOLESALER: FIELD SCHEMA ──────────────────────────────────────────────
-app.get('/api/wholesaler/field-schema', auth, wholesalerOnly, (req, res) => {
-  const user = DB.findUser({ id: req.user.id });
-  res.json(user.fieldSchema || defaultFieldSchema());
+app.get('/api/wholesalers/by-slug/:slug', async (req, res) => {
+  try {
+    const w = await DB.findUser({ slug: req.params.slug, role: 'wholesaler' });
+    if (!w) return res.status(404).json({ error: 'Not found' });
+    res.json({ id: w.id, firmName: w.firmName, slug: w.slug });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/wholesaler/field-schema', auth, wholesalerOnly, (req, res) => {
-  const { schema } = req.body;
-  if (!schema || typeof schema !== 'object') return res.status(400).json({ error: 'schema object required' });
-  DB.updateUser({ id: req.user.id }, { fieldSchema: schema });
-  res.json({ ok: true });
+// ── FIELD SCHEMA ──────────────────────────────────────────────────────────
+app.get('/api/wholesaler/field-schema', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const user = await DB.findUser({ id: req.user.id });
+    res.json(user.fieldSchema || defaultFieldSchema());
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Public: resellers and catalog pages fetch the wholesaler's schema
-app.get('/api/field-schema/:wholesalerId', (req, res) => {
-  const user = DB.findUser({ id: req.params.wholesalerId });
-  if (!user) return res.status(404).json({ error: 'Not found' });
-  res.json(user.fieldSchema || defaultFieldSchema());
+app.put('/api/wholesaler/field-schema', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const { schema } = req.body;
+    if (!schema) return res.status(400).json({ error: 'schema required' });
+    await DB.updateUser({ id: req.user.id }, { fieldSchema: schema });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── WHOLESALER: CATALOGS ─────────────────────────────────────────────────
-app.get('/api/catalogs', auth, (req, res) => {
-  if (req.user.role === 'wholesaler') return res.json(DB.findCatalogs({ ownerId: req.user.id }));
-  if (req.user.role === 'reseller') return res.json(DB.findCatalogs({ ownerId: req.user.id }));
-  if (req.user.role === 'admin') return res.json(DB.findCatalogs());
-  res.status(403).json({ error: 'Forbidden' });
+app.get('/api/field-schema/:wholesalerId', async (req, res) => {
+  try {
+    const user = await DB.findUser({ id: req.params.wholesalerId });
+    if (!user) return res.status(404).json({ error: 'Not found' });
+    res.json(user.fieldSchema || defaultFieldSchema());
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/catalogs', auth, (req, res) => {
-  if (req.user.role === 'reseller') {
-    const user = DB.findUser({ id: req.user.id });
-    if (!user || user.status !== 'approved') return res.status(403).json({ error: 'Your account is pending wholesaler approval.' });
-  } else if (req.user.role !== 'wholesaler') {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
-  const { name } = req.body;
-  if (!name) return res.status(400).json({ error: 'name is required' });
-  const slug = slugify(name) + '-' + Math.random().toString(36).substring(2, 6);
-  const cat = { id: uuid(), ownerId: req.user.id, name, slug, status: 'active', createdAt: new Date().toISOString() };
-  DB.createCatalog(cat);
-  res.json(cat);
+// ── CATALOGS ──────────────────────────────────────────────────────────────
+app.get('/api/catalogs', auth, async (req, res) => {
+  try {
+    if (req.user.role === 'admin') return res.json(await DB.findCatalogs());
+    res.json(await DB.findCatalogs({ ownerId: req.user.id }));
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/catalogs/:id', auth, (req, res) => {
-  const cat = DB.findCatalog({ id: req.params.id });
-  if (!cat) return res.status(404).json({ error: 'Not found' });
-  if (cat.ownerId !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-  const updates = {};
-  ['name', 'status'].forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
-  DB.updateCatalog({ id: req.params.id }, updates);
-  res.json({ ok: true });
+app.post('/api/catalogs', auth, async (req, res) => {
+  try {
+    if (req.user.role === 'reseller') {
+      const user = await DB.findUser({ id: req.user.id });
+      if (!user || user.status !== 'approved') return res.status(403).json({ error: 'Pending wholesaler approval.' });
+    } else if (req.user.role !== 'wholesaler') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'name required' });
+    const cat = { id: uuid(), ownerId: req.user.id, name, slug: slugify(name)+'-'+Math.random().toString(36).substring(2,6), status:'active', createdAt:new Date().toISOString() };
+    await DB.createCatalog(cat);
+    res.json(cat);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── PRODUCTS (wholesaler manual entry) ───────────────────────────────────
-app.get('/api/catalogs/:catalogId/products', auth, (req, res) => {
-  res.json(DB.findProducts({ catalogId: req.params.catalogId }));
+// ── PRODUCTS ──────────────────────────────────────────────────────────────
+app.get('/api/catalogs/:catalogId/products', auth, async (req, res) => {
+  try { res.json(await DB.findProducts({ catalogId: req.params.catalogId })); }
+  catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/catalogs/:catalogId/products', auth, wholesalerOnly, (req, res) => {
-  const cat = DB.findCatalog({ id: req.params.catalogId });
-  if (!cat) return res.status(404).json({ error: 'Catalog not found' });
-  if (cat.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-  const { itemNo, productName, imageName, category, minQty, unit, salePrice,
-    description, description2 } = req.body;
-  if (!itemNo || salePrice === undefined) return res.status(400).json({ error: 'itemNo and salePrice are required' });
-  const customFields = {};
-  for (let i = 1; i <= 13; i++) {
-    const k = `field${i}`;
-    customFields[k] = req.body[k] !== undefined ? req.body[k] : '';
-  }
-  const p = {
-    id: uuid(), catalogId: req.params.catalogId, ownerId: req.user.id,
-    itemNo, productName: productName || itemNo, imageName: imageName || '',
-    category: category || '', minQty: Number(minQty) || 1, unit: unit || 'Pcs',
-    salePrice: Number(salePrice) || 0, discPrice: 0,
-    description: description || '', description2: description2 || '',
-    ...customFields,
-    sourceWholesalerProductId: null,
-    createdAt: new Date().toISOString(),
-  };
-  DB.createProduct(p);
-  res.json(p);
+app.post('/api/catalogs/:catalogId/products', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const cat = await DB.findCatalog({ id: req.params.catalogId });
+    if (!cat) return res.status(404).json({ error: 'Catalog not found' });
+    if (cat.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    const { itemNo, productName, imageName, category, minQty, unit, salePrice, description, description2 } = req.body;
+    if (!itemNo || salePrice === undefined) return res.status(400).json({ error: 'itemNo and salePrice required' });
+    const customFields = {};
+    for (let i = 1; i <= 13; i++) { const k = `field${i}`; customFields[k] = req.body[k] !== undefined ? req.body[k] : ''; }
+    const p = { id: uuid(), catalogId: req.params.catalogId, ownerId: req.user.id,
+      itemNo, productName: productName||itemNo, imageName: imageName||'',
+      category: category||'', minQty: Number(minQty)||1, unit: unit||'Pcs',
+      salePrice: Number(salePrice)||0, discPrice: 0,
+      description: description||'', description2: description2||'',
+      ...customFields, sourceWholesalerProductId: null, createdAt: new Date().toISOString() };
+    await DB.createProduct(p);
+    res.json(p);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/products/:id', auth, wholesalerOnly, (req, res) => {
-  const p = DB.findProduct({ id: req.params.id });
-  if (!p) return res.status(404).json({ error: 'Not found' });
-  if (p.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-  const allowed = ['itemNo', 'productName', 'imageName', 'category', 'minQty', 'unit', 'salePrice',
-    'description', 'description2', 'filter1', 'filter2', 'filter3', 'tag1', 'tag2'];
-  const updates = {};
-  allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
-  DB.updateProduct({ id: req.params.id }, updates);
-  res.json({ ok: true });
+app.delete('/api/products/:id', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const p = await DB.findProduct({ id: req.params.id });
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    if (p.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    await DB.deleteProducts({ id: req.params.id });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/products/:id', auth, wholesalerOnly, (req, res) => {
-  const p = DB.findProduct({ id: req.params.id });
-  if (!p) return res.status(404).json({ error: 'Not found' });
-  if (p.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-  DB.deleteProducts({ id: req.params.id });
-  res.json({ ok: true });
-});
-
-// ── CSV/XLSX UPLOAD (wholesaler items, no discPrice) ─────────────────────
+// ── CSV/XLSX UPLOAD ───────────────────────────────────────────────────────
 const csvUploader = multer({
   storage: multer.diskStorage({
-    destination: (_req, _f, cb) => { const d = path.join(__dirname, 'uploads', 'csv'); fs.mkdirSync(d, { recursive: true }); cb(null, d); },
-    filename: (_req, file, cb) => cb(null, uuid() + '_' + file.originalname),
+    destination: (_req, _f, cb) => { const d = path.join(__dirname,'uploads','csv'); fs.mkdirSync(d,{recursive:true}); cb(null,d); },
+    filename: (_req, file, cb) => cb(null, uuid()+'_'+file.originalname),
   }),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 10*1024*1024 },
 });
 
-app.post('/api/catalogs/:catalogId/upload-csv', auth, wholesalerOnly, csvUploader.single('csv'), (req, res) => {
+app.post('/api/catalogs/:catalogId/upload-csv', auth, wholesalerOnly, csvUploader.single('csv'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
     const catId = req.params.catalogId;
-    const cat = DB.findCatalog({ id: catId });
+    const cat = await DB.findCatalog({ id: catId });
     if (!cat) return res.status(404).json({ error: 'Catalog not found' });
     if (cat.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
 
     let rows = [];
     const ext = path.extname(req.file.originalname).toLowerCase();
     if (ext === '.csv') {
-      rows = parse(fs.readFileSync(req.file.path, 'utf8'), { columns: true, skip_empty_lines: true, trim: true });
-    } else if (ext === '.xlsx' || ext === '.xls') {
+      rows = parse(fs.readFileSync(req.file.path,'utf8'), { columns:true, skip_empty_lines:true, trim:true });
+    } else if (ext==='.xlsx'||ext==='.xls') {
       const wb = XLSX.readFile(req.file.path);
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const allRows = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
       let hi = -1;
-      for (let i = 0; i < Math.min(allRows.length, 10); i++) {
-        if (allRows[i].some(c => String(c).toLowerCase().includes('item no'))) { hi = i; break; }
+      for (let i=0;i<Math.min(allRows.length,10);i++) {
+        if (allRows[i].some(c=>String(c).toLowerCase().includes('item'))) { hi=i; break; }
       }
-      if (hi === -1) return res.status(400).json({ error: 'Cannot find header row with "Item No" column' });
-      rows = XLSX.utils.sheet_to_json(ws, { defval: '', range: hi });
+      if (hi===-1) return res.status(400).json({ error: 'Cannot find header row' });
+      rows = XLSX.utils.sheet_to_json(ws,{defval:'',range:hi});
     } else {
       return res.status(400).json({ error: 'Please upload .csv or .xlsx' });
     }
     if (!rows.length) return res.status(400).json({ error: 'File is empty' });
 
-    const col = (row, ...keys) => {
+    const col = (row,...keys) => {
       for (const k of keys) {
-        const found = Object.keys(row).find(rk => rk.toLowerCase().replace(/[\s*_()]/g, '').startsWith(k.toLowerCase().replace(/[\s*_()]/g, '')));
-        if (found && String(row[found]).trim() !== '') return String(row[found]).trim();
+        const found = Object.keys(row).find(rk => rk.toLowerCase().replace(/[\s*_()]/g,'').startsWith(k.toLowerCase().replace(/[\s*_()]/g,'')));
+        if (found && String(row[found]).trim()!=='') return String(row[found]).trim();
       }
       return '';
     };
 
-    const wholesalerUser = DB.findUser({ id: req.user.id });
+    const wholesalerUser = await DB.findUser({ id: req.user.id });
     const schema = wholesalerUser.fieldSchema || defaultFieldSchema();
 
-    let inserted = [], errors = [];
-    rows.forEach((row, idx) => {
-      const rowNum = idx + 2, rowErrors = [];
-      const itemNo = col(row, 'itemno', 'item no', 'item code', 'code', 'sku');
-      const sp = col(row, 'saleprice', 'sale price', 'selling price', 'sellingprice', 'price');
-      if (!itemNo) rowErrors.push('Item Code is missing');
-      if (!sp || isNaN(parseFloat(sp))) rowErrors.push('Selling Price missing or invalid');
-      if (parseFloat(sp) < 0) rowErrors.push('Selling Price cannot be negative');
-
-      // Validate mandatory custom fields
-      for (let i = 1; i <= 13; i++) {
-        const fd = schema[`field${i}`];
-        if (fd && fd.enabled && fd.name && fd.required) {
-          const v = col(row, fd.name);
-          if (!v) rowErrors.push(`${fd.name} is required`);
-        }
+    let inserted=[], errors=[];
+    rows.forEach((row,idx) => {
+      const rowNum=idx+2, rowErrors=[];
+      const itemNo = col(row,'itemno','item no','item code','code','sku');
+      const sp = col(row,'sellingprice','selling price','saleprice','sale price','price');
+      if (!itemNo) rowErrors.push('Item Code missing');
+      if (!sp||isNaN(parseFloat(sp))) rowErrors.push('Selling Price missing or invalid');
+      for (let i=1;i<=13;i++) {
+        const fd=schema[`field${i}`];
+        if (fd&&fd.enabled&&fd.name&&fd.required&&!col(row,fd.name)) rowErrors.push(`${fd.name} is required`);
       }
+      if (rowErrors.length) { errors.push({row:rowNum,itemNo:itemNo||'(blank)',errors:rowErrors}); return; }
 
-      if (rowErrors.length) { errors.push({ row: rowNum, itemNo: itemNo || '(blank)', errors: rowErrors }); return; }
-
-      // Map custom fields using schema names
-      const customFields = {};
-      for (let i = 1; i <= 13; i++) {
-        const k = `field${i}`;
-        const fd = schema[k];
-        if (fd && fd.enabled && fd.name) {
-          const raw = col(row, fd.name);
-          customFields[k] = fd.type === 'number' ? (parseFloat(raw) || 0) : raw;
-        } else {
-          customFields[k] = '';
-        }
+      const customFields={};
+      for (let i=1;i<=13;i++) {
+        const k=`field${i}`, fd=schema[k];
+        if (fd&&fd.enabled&&fd.name) {
+          const raw=col(row,fd.name);
+          customFields[k] = fd.type==='number' ? (parseFloat(raw)||0) : raw;
+        } else { customFields[k]=''; }
       }
-
       inserted.push({
-        id: uuid(), catalogId: catId, ownerId: req.user.id,
-        itemNo,
-        productName: col(row, 'productname', 'product name', 'item name', 'name') || itemNo,
-        imageName: (col(row, 'imagename', 'image name', 'image', 'img') || itemNo).replace(/\s+/g, '-').trim(),
-        category: col(row, 'category', 'cat'),
-        minQty: parseFloat(col(row, 'minqty', 'min qty', 'minimumqty', 'minimum qty')) || 1,
-        unit: col(row, 'unit') || 'Pcs',
-        salePrice: parseFloat(sp), discPrice: 0,
-        description: col(row, 'description', 'desc'),
-        description2: col(row, 'description2', 'desc2'),
-        ...customFields,
-        sourceWholesalerProductId: null,
-        createdAt: new Date().toISOString(),
+        id:uuid(), catalogId:catId, ownerId:req.user.id,
+        itemNo, productName:col(row,'productname','product name','item name','name')||itemNo,
+        imageName:(col(row,'imagename','image name','image','img')||itemNo).replace(/\s+/g,'-').trim(),
+        category:col(row,'category','cat'),
+        minQty:parseFloat(col(row,'minqty','min qty','minimumqty'))||1,
+        unit:col(row,'unit')||'Pcs',
+        salePrice:parseFloat(sp), discPrice:0,
+        description:col(row,'description','desc'), description2:col(row,'description2','desc2'),
+        ...customFields, sourceWholesalerProductId:null, createdAt:new Date().toISOString(),
       });
     });
 
-    if (inserted.length > 0) DB.bulkCreateProducts(inserted);
+    if (inserted.length>0) await DB.bulkCreateProducts(inserted);
     res.json({
-      ok: inserted.length > 0, count: inserted.length, errorCount: errors.length, errors,
-      preview: inserted.slice(0, 5),
-      message: inserted.length > 0
-        ? `${inserted.length} products imported${errors.length > 0 ? ` · ${errors.length} rows skipped` : ''}`
+      ok:inserted.length>0, count:inserted.length, errorCount:errors.length, errors,
+      message: inserted.length>0
+        ? `${inserted.length} products imported${errors.length>0?` · ${errors.length} rows skipped`:''}`
         : `No products imported — ${errors.length} rows had errors`,
     });
-  } catch (err) {
-    res.status(400).json({ error: 'Parse error: ' + err.message });
-  }
+  } catch(err) { res.status(400).json({ error:'Parse error: '+err.message }); }
 });
 
-// ── WHOLESALER: RESELLERS MANAGEMENT ─────────────────────────────────────
-app.get('/api/wholesaler/resellers', auth, wholesalerOnly, (req, res) => {
-  const resellers = DB.findUsers({ wholesalerId: req.user.id, role: 'reseller' });
-  res.json(resellers.map(safeUser));
+// ── WHOLESALER: RESELLERS ─────────────────────────────────────────────────
+app.get('/api/wholesaler/resellers', auth, wholesalerOnly, async (req, res) => {
+  try { res.json((await DB.findUsers({ wholesalerId: req.user.id, role:'reseller' })).map(safeUser)); }
+  catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/wholesaler/resellers/:id/approve', auth, wholesalerOnly, (req, res) => {
-  const reseller = DB.findUser({ id: req.params.id, role: 'reseller' });
-  if (!reseller) return res.status(404).json({ error: 'Reseller not found' });
-  if (reseller.wholesalerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-  DB.updateUser({ id: req.params.id }, { status: 'approved' });
-  res.json({ ok: true, status: 'approved' });
+app.put('/api/wholesaler/resellers/:id/approve', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const r = await DB.findUser({ id:req.params.id, role:'reseller' });
+    if (!r) return res.status(404).json({ error:'Not found' });
+    if (r.wholesalerId!==req.user.id) return res.status(403).json({ error:'Forbidden' });
+    await DB.updateUser({ id:req.params.id }, { status:'approved' });
+    res.json({ ok:true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/wholesaler/resellers/:id/reject', auth, wholesalerOnly, (req, res) => {
-  const reseller = DB.findUser({ id: req.params.id, role: 'reseller' });
-  if (!reseller) return res.status(404).json({ error: 'Reseller not found' });
-  if (reseller.wholesalerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-  DB.updateUser({ id: req.params.id }, { status: 'rejected' });
-  res.json({ ok: true, status: 'rejected' });
+app.put('/api/wholesaler/resellers/:id/reject', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const r = await DB.findUser({ id:req.params.id, role:'reseller' });
+    if (!r) return res.status(404).json({ error:'Not found' });
+    if (r.wholesalerId!==req.user.id) return res.status(403).json({ error:'Forbidden' });
+    await DB.updateUser({ id:req.params.id }, { status:'rejected' });
+    res.json({ ok:true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Wholesaler's view of B2B orders forwarded from resellers
-app.get('/api/wholesaler/wholesale-orders', auth, wholesalerOnly, (req, res) => {
-  res.json(DB.findWholesaleOrders({ wholesalerId: req.user.id }));
+app.get('/api/wholesaler/wholesale-orders', auth, wholesalerOnly, async (req, res) => {
+  try { res.json(await DB.findWholesaleOrders({ wholesalerId: req.user.id })); }
+  catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── RESELLER: BROWSE WHOLESALER ITEMS (read-only) ────────────────────────
-app.get('/api/reseller/wholesaler-items', auth, resellerOnly, (req, res) => {
-  const user = DB.findUser({ id: req.user.id });
-  if (!user.wholesalerId) return res.status(400).json({ error: 'No wholesaler linked' });
-  const items = DB.findProducts({ ownerId: user.wholesalerId });
-  const wholesaler = DB.findUser({ id: user.wholesalerId });
-  const schema = wholesaler ? (wholesaler.fieldSchema || defaultFieldSchema()) : defaultFieldSchema();
-  res.json({ items, schema });
+// ── RESELLER ──────────────────────────────────────────────────────────────
+app.get('/api/reseller/wholesaler-items', auth, resellerOnly, async (req, res) => {
+  try {
+    const user = await DB.findUser({ id: req.user.id });
+    if (!user.wholesalerId) return res.status(400).json({ error:'No wholesaler linked' });
+    const items = await DB.findProducts({ ownerId: user.wholesalerId });
+    const wholesaler = await DB.findUser({ id: user.wholesalerId });
+    const schema = wholesaler ? (wholesaler.fieldSchema || defaultFieldSchema()) : defaultFieldSchema();
+    res.json({ items, schema });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── RESELLER: BUILD CATALOG WITH MARGIN/DISCOUNT ─────────────────────────
 function computePrices(wholesalerPrice, marginPct, discountPct) {
-  const margin = Number(marginPct) || 0;
-  const discount = Number(discountPct) || 0;
-  const finalPrice = wholesalerPrice * (1 + margin / 100); // discPrice
-  const displayedMRP = discount > 0 ? finalPrice / (1 - discount / 100) : finalPrice; // salePrice
-  return { discPrice: round2(finalPrice), salePrice: round2(displayedMRP) };
+  const margin = Number(marginPct)||0, discount = Number(discountPct)||0;
+  const finalPrice = wholesalerPrice*(1+margin/100);
+  const displayedMRP = discount>0 ? finalPrice/(1-discount/100) : finalPrice;
+  return { discPrice:round2(finalPrice), salePrice:round2(displayedMRP) };
 }
 
-// Add a wholesaler item into reseller's own catalog with margin/discount
-app.post('/api/reseller/catalog-items', auth, approvedResellerOnly, (req, res) => {
-  const { catalogId, wholesalerProductId, marginPct, discountPct } = req.body;
-  if (!catalogId || !wholesalerProductId) return res.status(400).json({ error: 'catalogId and wholesalerProductId are required' });
-  const cat = DB.findCatalog({ id: catalogId });
-  if (!cat || cat.ownerId !== req.user.id) return res.status(404).json({ error: 'Catalog not found' });
-  const wp = DB.findProduct({ id: wholesalerProductId });
-  if (!wp) return res.status(404).json({ error: 'Wholesaler product not found' });
-  const user = DB.findUser({ id: req.user.id });
-  if (wp.ownerId !== user.wholesalerId) return res.status(403).json({ error: 'Item does not belong to your linked wholesaler' });
-
-  const { discPrice, salePrice } = computePrices(wp.salePrice, marginPct, discountPct);
-  const customFields = {};
-  for (let i = 1; i <= 13; i++) { const k = `field${i}`; customFields[k] = wp[k] || ''; }
-  const p = {
-    id: uuid(), catalogId, ownerId: req.user.id,
-    itemNo: wp.itemNo, productName: wp.productName, imageName: wp.imageName,
-    category: wp.category, minQty: wp.minQty, unit: wp.unit,
-    salePrice, discPrice,
-    description: wp.description, description2: wp.description2,
-    ...customFields,
-    sourceWholesalerProductId: wp.id,
-    marginPct: Number(marginPct) || 0, discountPct: Number(discountPct) || 0,
-    createdAt: new Date().toISOString(),
-  };
-  DB.createProduct(p);
-  res.json(p);
-});
-
-// Bulk apply margin/discount to multiple wholesaler items at once
-app.post('/api/reseller/catalog-items/bulk', auth, approvedResellerOnly, (req, res) => {
-  const { catalogId, wholesalerProductIds, marginPct, discountPct } = req.body;
-  if (!catalogId || !Array.isArray(wholesalerProductIds) || !wholesalerProductIds.length) {
-    return res.status(400).json({ error: 'catalogId and wholesalerProductIds[] are required' });
-  }
-  const cat = DB.findCatalog({ id: catalogId });
-  if (!cat || cat.ownerId !== req.user.id) return res.status(404).json({ error: 'Catalog not found' });
-  const user = DB.findUser({ id: req.user.id });
-  const created = [];
-  for (const wpId of wholesalerProductIds) {
-    const wp = DB.findProduct({ id: wpId });
-    if (!wp || wp.ownerId !== user.wholesalerId) continue;
-    const { discPrice, salePrice } = computePrices(wp.salePrice, marginPct, discountPct);
-    const customFields = {};
-    for (let i = 1; i <= 13; i++) { const k = `field${i}`; customFields[k] = wp[k] || ''; }
-    const p = {
-      id: uuid(), catalogId, ownerId: req.user.id,
-      itemNo: wp.itemNo, productName: wp.productName, imageName: wp.imageName,
-      category: wp.category, minQty: wp.minQty, unit: wp.unit,
-      salePrice, discPrice,
-      description: wp.description, description2: wp.description2,
-      ...customFields,
-      sourceWholesalerProductId: wp.id,
-      marginPct: Number(marginPct) || 0, discountPct: Number(discountPct) || 0,
-      createdAt: new Date().toISOString(),
-    };
-    DB.createProduct(p);
-    created.push(p);
-  }
-  res.json({ ok: true, count: created.length, items: created });
-});
-
-app.put('/api/reseller/catalog-items/:id', auth, approvedResellerOnly, (req, res) => {
-  const p = DB.findProduct({ id: req.params.id });
-  if (!p) return res.status(404).json({ error: 'Not found' });
-  if (p.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-  const { marginPct, discountPct } = req.body;
-  if (marginPct === undefined && discountPct === undefined) return res.status(400).json({ error: 'Nothing to update' });
-  const wp = p.sourceWholesalerProductId ? DB.findProduct({ id: p.sourceWholesalerProductId }) : null;
-  const basePrice = wp ? wp.salePrice : p.salePrice;
-  const { discPrice, salePrice } = computePrices(
-    basePrice,
-    marginPct !== undefined ? marginPct : p.marginPct,
-    discountPct !== undefined ? discountPct : p.discountPct
-  );
-  DB.updateProduct({ id: req.params.id }, {
-    marginPct: marginPct !== undefined ? Number(marginPct) : p.marginPct,
-    discountPct: discountPct !== undefined ? Number(discountPct) : p.discountPct,
-    discPrice, salePrice,
-  });
-  res.json({ ok: true, discPrice, salePrice });
+app.post('/api/reseller/catalog-items/bulk', auth, approvedResellerOnly, async (req, res) => {
+  try {
+    const { catalogId, wholesalerProductIds, marginPct, discountPct } = req.body;
+    if (!catalogId||!Array.isArray(wholesalerProductIds)||!wholesalerProductIds.length)
+      return res.status(400).json({ error:'catalogId and wholesalerProductIds[] required' });
+    const cat = await DB.findCatalog({ id:catalogId });
+    if (!cat||cat.ownerId!==req.user.id) return res.status(404).json({ error:'Catalog not found' });
+    const user = await DB.findUser({ id:req.user.id });
+    const created=[];
+    for (const wpId of wholesalerProductIds) {
+      const wp = await DB.findProduct({ id:wpId });
+      if (!wp||wp.ownerId!==user.wholesalerId) continue;
+      const {discPrice,salePrice} = computePrices(wp.salePrice, marginPct, discountPct);
+      const customFields={};
+      for (let i=1;i<=13;i++) { const k=`field${i}`; customFields[k]=wp[k]||''; }
+      const p = { id:uuid(), catalogId, ownerId:req.user.id,
+        itemNo:wp.itemNo, productName:wp.productName, imageName:wp.imageName,
+        category:wp.category, minQty:wp.minQty, unit:wp.unit, salePrice, discPrice,
+        description:wp.description, description2:wp.description2, ...customFields,
+        sourceWholesalerProductId:wp.id, marginPct:Number(marginPct)||0, discountPct:Number(discountPct)||0,
+        createdAt:new Date().toISOString() };
+      await DB.createProduct(p);
+      created.push(p);
+    }
+    res.json({ ok:true, count:created.length });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── PUBLIC CATALOG ────────────────────────────────────────────────────────
-app.get('/api/public/:userId/:slug', (req, res) => {
-  const owner = DB.findUser({ id: req.params.userId });
-  if (!owner) return res.status(404).json({ error: 'Not found' });
-  const cat = DB.findCatalog({ ownerId: owner.id, slug: req.params.slug });
-  if (!cat) return res.status(404).json({ error: 'Catalog not found' });
-  const products = DB.findProducts({ catalogId: cat.id });
-  // Get the wholesaler's schema (for reseller catalogs, look up the source wholesaler)
-  let schema = defaultFieldSchema();
-  const resellerUser = DB.findUser({ id: owner.id });
-  if (resellerUser && resellerUser.role === 'reseller' && resellerUser.wholesalerId) {
-    const wholesaler = DB.findUser({ id: resellerUser.wholesalerId });
-    if (wholesaler) schema = wholesaler.fieldSchema || defaultFieldSchema();
-  } else if (resellerUser && resellerUser.role === 'wholesaler') {
-    schema = resellerUser.fieldSchema || defaultFieldSchema();
-  }
-  res.json({ catalog: cat, owner: safeUser(owner), products, schema });
-});
-
-// ── ORDERS (public customer orders against reseller catalogs) ───────────
-app.get('/api/orders', auth, (req, res) => {
-  if (req.user.role === 'admin') return res.json(db.get('orders').value());
-  res.json(DB.findOrders({ ownerId: req.user.id }));
-});
-
-app.post('/api/orders', (req, res) => {
-  const { catalogId, customerName, customerPhone, customerEmail, address, items, total } = req.body;
-  if (!catalogId || !customerName || !customerPhone) return res.status(400).json({ error: 'Name and phone required' });
-  const cat = DB.findCatalog({ id: catalogId });
-  if (!cat) return res.status(404).json({ error: 'Catalog not found' });
-  const order = {
-    id: uuid(), orderNo: genOrderNo('ORD'), catalogId, catalogName: cat.name, ownerId: cat.ownerId,
-    customerName, customerPhone, customerEmail: customerEmail || '', address: address || '',
-    items: items || [], total: total || 0, forwardedToWholesaler: false,
-    createdAt: new Date().toISOString(),
-  };
-  DB.createOrder(order);
-  res.json(order);
-});
-
-// ── FORWARD ORDER TO WHOLESALER ──────────────────────────────────────────
-app.post('/api/orders/:id/forward-to-wholesaler', auth, resellerOnly, (req, res) => {
-  const order = DB.findOrder({ id: req.params.id });
-  if (!order) return res.status(404).json({ error: 'Order not found' });
-  if (order.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-  if (order.forwardedToWholesaler) return res.status(400).json({ error: 'Order already forwarded' });
-
-  const user = DB.findUser({ id: req.user.id });
-  if (!user.wholesalerId) return res.status(400).json({ error: 'No wholesaler linked to your account' });
-
-  // Map each ordered item back to wholesaler item code/price (the ORIGINAL wholesaler price)
-  const wholesaleItems = (order.items || []).map(item => {
-    const resellerProduct = DB.findProducts({ catalogId: order.catalogId, itemNo: item.itemNo })[0];
-    let wholesalerPrice = item.price;
-    let wholesalerItemNo = item.itemNo;
-    if (resellerProduct && resellerProduct.sourceWholesalerProductId) {
-      const wp = DB.findProduct({ id: resellerProduct.sourceWholesalerProductId });
-      if (wp) { wholesalerPrice = wp.salePrice; wholesalerItemNo = wp.itemNo; }
+app.get('/api/public/:userId/:slug', async (req, res) => {
+  try {
+    const owner = await DB.findUser({ id:req.params.userId });
+    if (!owner) return res.status(404).json({ error:'Not found' });
+    const cat = await DB.findCatalog({ ownerId:owner.id, slug:req.params.slug });
+    if (!cat) return res.status(404).json({ error:'Catalog not found' });
+    const products = await DB.findProducts({ catalogId:cat.id });
+    let schema = defaultFieldSchema();
+    if (owner.role==='reseller'&&owner.wholesalerId) {
+      const w = await DB.findUser({ id:owner.wholesalerId });
+      if (w) schema = w.fieldSchema||defaultFieldSchema();
+    } else if (owner.role==='wholesaler') {
+      schema = owner.fieldSchema||defaultFieldSchema();
     }
-    return { itemNo: wholesalerItemNo, productName: item.productName, qty: item.qty, unit: item.unit, price: wholesalerPrice };
-  });
-  const total = wholesaleItems.reduce((sum, i) => sum + (i.price * i.qty), 0);
+    res.json({ catalog:cat, owner:safeUser(owner), products, schema });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
 
-  const wsOrder = {
-    id: uuid(), orderNo: genOrderNo('WHO'), originalOrderId: order.id,
-    wholesalerId: user.wholesalerId, resellerId: user.id,
-    items: wholesaleItems, total: round2(total), status: 'pending',
-    createdAt: new Date().toISOString(),
-  };
-  DB.createWholesaleOrder(wsOrder);
-  DB.updateOrder({ id: order.id }, { forwardedToWholesaler: true });
-  res.json({ ok: true, wholesaleOrder: wsOrder });
+// ── ORDERS ────────────────────────────────────────────────────────────────
+app.get('/api/orders', auth, async (req, res) => {
+  try {
+    if (req.user.role==='admin') return res.json(await DB.findOrders());
+    res.json(await DB.findOrders({ ownerId:req.user.id }));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/orders', async (req, res) => {
+  try {
+    const { catalogId, customerName, customerPhone, customerEmail, address, items, total } = req.body;
+    if (!catalogId||!customerName||!customerPhone) return res.status(400).json({ error:'Name and phone required' });
+    const cat = await DB.findCatalog({ id:catalogId });
+    if (!cat) return res.status(404).json({ error:'Catalog not found' });
+    const order = { id:uuid(), orderNo:genOrderNo('ORD'), catalogId, catalogName:cat.name, ownerId:cat.ownerId,
+      customerName, customerPhone, customerEmail:customerEmail||'', address:address||'',
+      items:items||[], total:total||0, forwardedToWholesaler:false, createdAt:new Date().toISOString() };
+    await DB.createOrder(order);
+    res.json(order);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/orders/:id/forward-to-wholesaler', auth, resellerOnly, async (req, res) => {
+  try {
+    const order = await DB.findOrder({ id:req.params.id });
+    if (!order) return res.status(404).json({ error:'Order not found' });
+    if (order.ownerId!==req.user.id) return res.status(403).json({ error:'Forbidden' });
+    if (order.forwardedToWholesaler) return res.status(400).json({ error:'Order already forwarded' });
+    const user = await DB.findUser({ id:req.user.id });
+    if (!user.wholesalerId) return res.status(400).json({ error:'No wholesaler linked' });
+    const wholesaleItems = await Promise.all((order.items||[]).map(async item => {
+      const prods = await DB.findProducts({ catalogId:order.catalogId, itemNo:item.itemNo });
+      const rp = prods[0];
+      let price=item.price, itemNo=item.itemNo;
+      if (rp&&rp.sourceWholesalerProductId) {
+        const wp = await DB.findProduct({ id:rp.sourceWholesalerProductId });
+        if (wp) { price=wp.salePrice; itemNo=wp.itemNo; }
+      }
+      return { itemNo, productName:item.productName, qty:item.qty, unit:item.unit, price };
+    }));
+    const total = wholesaleItems.reduce((s,i)=>s+(i.price*i.qty),0);
+    const wsOrder = { id:uuid(), orderNo:genOrderNo('WHO'), originalOrderId:order.id,
+      wholesalerId:user.wholesalerId, resellerId:user.id,
+      items:wholesaleItems, total:round2(total), status:'pending', createdAt:new Date().toISOString() };
+    await DB.createWholesaleOrder(wsOrder);
+    await DB.updateOrder({ id:order.id }, { forwardedToWholesaler:true });
+    res.json({ ok:true, wholesaleOrder:wsOrder });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── ADMIN ─────────────────────────────────────────────────────────────────
-app.get('/api/admin/wholesalers', auth, adminOnly, (req, res) => {
-  res.json(DB.findUsers({ role: 'wholesaler' }).map(safeUser));
+app.get('/api/admin/wholesalers', auth, adminOnly, async (req,res) => {
+  try { res.json((await DB.findUsers({role:'wholesaler'})).map(safeUser)); }
+  catch(e) { res.status(500).json({error:e.message}); }
 });
-app.get('/api/admin/resellers', auth, adminOnly, (req, res) => {
-  res.json(DB.findUsers({ role: 'reseller' }).map(safeUser));
-});
-app.put('/api/admin/users/:id/deactivate', auth, adminOnly, (req, res) => {
-  const u = DB.findUser({ id: req.params.id });
-  if (!u) return res.status(404).json({ error: 'Not found' });
-  DB.updateUser({ id: req.params.id }, { status: 'inactive' });
-  res.json({ ok: true });
+app.get('/api/admin/resellers', auth, adminOnly, async (req,res) => {
+  try { res.json((await DB.findUsers({role:'reseller'})).map(safeUser)); }
+  catch(e) { res.status(500).json({error:e.message}); }
 });
 
 // ── STATIC + SPA ──────────────────────────────────────────────────────────
-app.get('/w/:slug/signup', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/catalog/:userId/:slug', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/{*path}', (req, res) => {
-  if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.get('/w/:slug/signup', (_req,res) => res.sendFile(path.join(__dirname,'public','index.html')));
+app.get('/catalog/:userId/:slug', (_req,res) => res.sendFile(path.join(__dirname,'public','index.html')));
+app.use(express.static(path.join(__dirname,'public')));
+app.get('/{*path}', (req,res) => {
+  if (req.path.startsWith('/api')) return res.status(404).json({error:'Not found'});
+  res.sendFile(path.join(__dirname,'public','index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Wholesale Reseller SaaS running at http://localhost:${PORT}`);
-});
+// ── START ─────────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    if (MONGO_URI) {
+      await initMongoDB();
+    } else {
+      initLowDB();
+    }
+    await seedAdmin();
+    app.listen(PORT, () => console.log(`eCATLOG SaaS running at http://localhost:${PORT}`));
+  } catch(err) {
+    console.error('Startup error:', err.message);
+    process.exit(1);
+  }
+})();

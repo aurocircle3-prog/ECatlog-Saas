@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wholesale Reseller SaaS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body{font-family:-apple-system,Segoe UI,sans-serif;margin:0;background:#f5f6fa;color:#222;}
+  header{background:#2e3192;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;}
+  header b{font-size:18px;}
+  main{max-width:1000px;margin:20px auto;padding:0 16px;}
+  .card{background:#fff;border:1px solid #e3e3e3;border-radius:10px;padding:20px;margin-bottom:18px;}
+  input,select,button,textarea{padding:8px 10px;border:1px solid #ccc;border-radius:6px;font-size:14px;margin:4px 0;}
+  input,select,textarea{width:100%;box-sizing:border-box;}
+  button{background:#2e3192;color:#fff;border:none;cursor:pointer;font-weight:600;padding:9px 16px;}
+  button.secondary{background:#888;}
+  button.danger{background:#c0392b;}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px;}
+  th,td{padding:7px 8px;border-bottom:1px solid #eee;text-align:left;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .row > div{flex:1;min-width:160px;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:700;}
+  .pill.pending{background:#fff3cd;color:#946c00;}
+  .pill.approved{background:#d4edda;color:#1e7e34;}
+  .pill.rejected{background:#f8d7da;color:#a71d2a;}
+  .tabs{display:flex;gap:8px;margin-bottom:14px;}
+  .tabs button{background:#eee;color:#333;}
+  .tabs button.active{background:#2e3192;color:#fff;}
+  .msg{padding:8px 12px;border-radius:6px;margin:8px 0;font-size:13px;}
+  .msg.err{background:#f8d7da;color:#a71d2a;}
+  .msg.ok{background:#d4edda;color:#1e7e34;}
+  .product-card{border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px;}
+  a{color:#2e3192;}
+</style>
+</head>
+<body>
+<header><b>Wholesale Reseller SaaS</b><span id="who"></span></header>
+<main id="app"></main>
+
+<script>
+const API = '';
+let TOKEN = localStorage.getItem('token') || '';
+let USER = JSON.parse(localStorage.getItem('user') || 'null');
+
+function api(method, url, body, isForm) {
+  const headers = {};
+  if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+  let opts = { method, headers };
+  if (body) {
+    if (isForm) { opts.body = body; }
+    else { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  }
+  return fetch(API + url, opts).then(async r => {
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  });
+}
+
+function logout() { localStorage.clear(); TOKEN=''; USER=null; render(); }
+
+function pathInfo() {
+  const m = location.pathname.match(/^\/w\/([^/]+)\/signup$/);
+  if (m) return { page: 'reseller-signup', slug: m[1] };
+  const m2 = location.pathname.match(/^\/catalog\/([^/]+)\/([^/]+)$/);
+  if (m2) return { page: 'public-catalog', userId: m2[1], slug: m2[2] };
+  return { page: 'app' };
+}
+
+function render() {
+  const info = pathInfo();
+  document.getElementById('who').textContent = USER ? `${USER.firmName} (${USER.role})` : '';
+  if (info.page === 'public-catalog') return renderPublicCatalog(info.userId, info.slug);
+  if (info.page === 'reseller-signup') return renderResellerSignup(info.slug);
+  if (!TOKEN || !USER) return renderLogin();
+  if (USER.role === 'wholesaler') return renderWholesalerDash();
+  if (USER.role === 'reseller') return renderResellerDash();
+  if (USER.role === 'admin') return renderAdminDash();
+}
+
+function renderLogin() {
+  document.getElementById('app').innerHTML = `
+  <div class="card">
+    <div class="tabs">
+      <button class="active" onclick="showLoginTab('login')" id="tab-login">Login</button>
+      <button onclick="showLoginTab('register-wholesaler')" id="tab-rw">Register as Wholesaler</button>
+    </div>
+    <div id="login-pane">
+      <h3>Login</h3>
+      <div id="login-msg"></div>
+      <input id="li-userId" placeholder="User ID (try: admin)">
+      <input id="li-password" type="password" placeholder="Password (try: admin123)">
+      <button onclick="doLogin()">Login</button>
+    </div>
+    <div id="register-wholesaler-pane" style="display:none">
+      <h3>Register as Wholesaler</h3>
+      <div id="rw-msg"></div>
+      <input id="rw-userId" placeholder="User ID">
+      <input id="rw-password" type="password" placeholder="Password">
+      <input id="rw-firmName" placeholder="Firm Name">
+      <input id="rw-contactPerson" placeholder="Contact Person">
+      <input id="rw-email" placeholder="Email">
+      <button onclick="doRegisterWholesaler()">Register</button>
+    </div>
+  </div>`;
+}
+function showLoginTab(t) {
+  document.getElementById('login-pane').style.display = t === 'login' ? '' : 'none';
+  document.getElementById('register-wholesaler-pane').style.display = t === 'register-wholesaler' ? '' : 'none';
+  document.getElementById('tab-login').className = t === 'login' ? 'active' : '';
+  document.getElementById('tab-rw').className = t === 'register-wholesaler' ? 'active' : '';
+}
+function doLogin() {
+  api('POST', '/api/login', { userId: val('li-userId'), password: val('li-password') })
+    .then(d => { TOKEN = d.token; USER = d.user; localStorage.setItem('token', TOKEN); localStorage.setItem('user', JSON.stringify(USER)); render(); })
+    .catch(e => document.getElementById('login-msg').innerHTML = `<div class="msg err">${e.message}</div>`);
+}
+function doRegisterWholesaler() {
+  api('POST', '/api/register', {
+    userId: val('rw-userId'), password: val('rw-password'), firmName: val('rw-firmName'),
+    contactPerson: val('rw-contactPerson'), email: val('rw-email'), role: 'wholesaler'
+  }).then(d => {
+    TOKEN = d.token; USER = d.user; localStorage.setItem('token', TOKEN); localStorage.setItem('user', JSON.stringify(USER));
+    render();
+  }).catch(e => document.getElementById('rw-msg').innerHTML = `<div class="msg err">${e.message}</div>`);
+}
+function val(id) { return document.getElementById(id).value; }
+
+function renderResellerSignup(slug) {
+  document.getElementById('app').innerHTML = `
+  <div class="card">
+    <h3>Reseller Signup for "${slug}"</h3>
+    <div id="rs-msg"></div>
+    <input id="rs-userId" placeholder="User ID">
+    <input id="rs-password" type="password" placeholder="Password">
+    <input id="rs-firmName" placeholder="Firm Name">
+    <input id="rs-contactPerson" placeholder="Contact Person">
+    <input id="rs-email" placeholder="Email">
+    <button onclick="doRegisterReseller('${slug}')">Sign Up</button>
+  </div>`;
+}
+function doRegisterReseller(slug) {
+  api('POST', '/api/register', {
+    userId: val('rs-userId'), password: val('rs-password'), firmName: val('rs-firmName'),
+    contactPerson: val('rs-contactPerson'), email: val('rs-email'), role: 'reseller', wholesalerSlug: slug
+  }).then(d => {
+    TOKEN = d.token; USER = d.user; localStorage.setItem('token', TOKEN); localStorage.setItem('user', JSON.stringify(USER));
+    history.pushState({}, '', '/');
+    render();
+  }).catch(e => document.getElementById('rs-msg').innerHTML = `<div class="msg err">${e.message}</div>`);
+}
+
+// ── WHOLESALER DASHBOARD ──────────────────────────────────────────────
+function renderWholesalerDash() {
+  document.getElementById('app').innerHTML = `
+  <div class="card">
+    <button class="danger" onclick="logout()" style="float:right">Logout</button>
+    <h3>Wholesaler Dashboard — ${USER.firmName}</h3>
+    <p>Signup link for resellers: <a href="/w/${USER.slug}/signup" target="_blank">/w/${USER.slug}/signup</a></p>
+  </div>
+  <div class="card"><h3>Catalogs</h3><div id="w-catalogs"></div></div>
+  <div class="card"><h3>Resellers</h3><div id="w-resellers"></div></div>
+  <div class="card"><h3>Orders forwarded from resellers</h3><div id="w-orders"></div></div>`;
+  loadWCatalogs(); loadWResellers(); loadWOrders();
+}
+function loadWCatalogs() {
+  api('GET', '/api/catalogs').then(cats => {
+    let html = `<input id="new-cat-name" placeholder="New catalog name" style="width:200px;display:inline-block">
+    <button onclick="createCatalog()">Add Catalog</button><br><br>`;
+    cats.forEach(c => {
+      html += `<div class="card" style="margin-bottom:10px">
+        <b>${c.name}</b> (slug: ${c.slug})
+        <div id="prods-${c.id}"></div>
+        <h4>Add item manually</h4>
+        <div class="row">
+          <input id="p-itemNo-${c.id}" placeholder="Item No*">
+          <input id="p-name-${c.id}" placeholder="Product Name">
+          <input id="p-price-${c.id}" placeholder="Sale Price*">
+          <input id="p-cat-${c.id}" placeholder="Category">
+          <input id="p-minqty-${c.id}" placeholder="Min Qty">
+          <input id="p-unit-${c.id}" placeholder="Unit">
+        </div>
+        <button onclick="addProduct('${c.id}')">Add Item</button>
+        <h4>Upload CSV/XLSX</h4>
+        <input type="file" id="csv-${c.id}">
+        <button onclick="uploadCsv('${c.id}')">Upload</button>
+        <div id="csv-msg-${c.id}"></div>
+      </div>`;
+    });
+    document.getElementById('w-catalogs').innerHTML = html;
+    cats.forEach(c => loadProducts(c.id));
+  });
+}
+function createCatalog() {
+  api('POST', '/api/catalogs', { name: val('new-cat-name') }).then(() => loadWCatalogs());
+}
+function loadProducts(catId) {
+  api('GET', `/api/catalogs/${catId}/products`).then(prods => {
+    let html = '<table><tr><th>Item No</th><th>Name</th><th>Price</th><th>Category</th></tr>';
+    prods.forEach(p => html += `<tr><td>${p.itemNo}</td><td>${p.productName}</td><td>${p.salePrice}</td><td>${p.category}</td></tr>`);
+    html += '</table>';
+    document.getElementById('prods-' + catId).innerHTML = html;
+  });
+}
+function addProduct(catId) {
+  api('POST', `/api/catalogs/${catId}/products`, {
+    itemNo: val('p-itemNo-' + catId), productName: val('p-name-' + catId),
+    salePrice: val('p-price-' + catId), category: val('p-cat-' + catId),
+    minQty: val('p-minqty-' + catId), unit: val('p-unit-' + catId)
+  }).then(() => loadProducts(catId));
+}
+function uploadCsv(catId) {
+  const f = document.getElementById('csv-' + catId).files[0];
+  if (!f) return;
+  const fd = new FormData(); fd.append('csv', f);
+  api('POST', `/api/catalogs/${catId}/upload-csv`, fd, true)
+    .then(d => { document.getElementById('csv-msg-' + catId).innerHTML = `<div class="msg ok">${d.message}</div>`; loadProducts(catId); })
+    .catch(e => document.getElementById('csv-msg-' + catId).innerHTML = `<div class="msg err">${e.message}</div>`);
+}
+function loadWResellers() {
+  api('GET', '/api/wholesaler/resellers').then(rs => {
+    let html = '<table><tr><th>Firm</th><th>UserId</th><th>Status</th><th>Action</th></tr>';
+    rs.forEach(r => {
+      html += `<tr><td>${r.firmName}</td><td>${r.userId}</td><td><span class="pill ${r.status}">${r.status}</span></td>
+      <td>${r.status === 'pending' ? `<button onclick="approveReseller('${r.id}')">Approve</button> <button class="secondary" onclick="rejectReseller('${r.id}')">Reject</button>` : ''}</td></tr>`;
+    });
+    html += '</table>';
+    document.getElementById('w-resellers').innerHTML = html;
+  });
+}
+function approveReseller(id) { api('PUT', `/api/wholesaler/resellers/${id}/approve`).then(() => loadWResellers()); }
+function rejectReseller(id) { api('PUT', `/api/wholesaler/resellers/${id}/reject`).then(() => loadWResellers()); }
+function loadWOrders() {
+  api('GET', '/api/wholesaler/wholesale-orders').then(os => {
+    let html = '<table><tr><th>Order No</th><th>Reseller</th><th>Total</th><th>Items</th></tr>';
+    os.forEach(o => html += `<tr><td>${o.orderNo}</td><td>${o.resellerId}</td><td>${o.total}</td><td>${(o.items||[]).map(i=>i.itemNo+' x'+i.qty).join(', ')}</td></tr>`);
+    html += '</table>';
+    document.getElementById('w-orders').innerHTML = html;
+  });
+}
+
+// ── RESELLER DASHBOARD ────────────────────────────────────────────────
+function renderResellerDash() {
+  if (USER.status === 'pending') {
+    document.getElementById('app').innerHTML = `<div class="card"><button class="danger" onclick="logout()" style="float:right">Logout</button>
+    <h3>Pending approval</h3><p>Your account is waiting for wholesaler approval. Please check back later.</p></div>`;
+    return;
+  }
+  if (USER.status === 'rejected') {
+    document.getElementById('app').innerHTML = `<div class="card"><button class="danger" onclick="logout()" style="float:right">Logout</button>
+    <h3>Rejected</h3><p>Your registration was rejected by the wholesaler.</p></div>`;
+    return;
+  }
+  document.getElementById('app').innerHTML = `
+  <div class="card"><button class="danger" onclick="logout()" style="float:right">Logout</button>
+  <h3>Reseller Dashboard — ${USER.firmName}</h3></div>
+  <div class="card"><h3>My Catalogs</h3><div id="r-catalogs"></div></div>
+  <div class="card"><h3>Wholesaler Items (browse)</h3><div id="r-items"></div></div>
+  <div class="card"><h3>My Orders</h3><div id="r-orders"></div></div>`;
+  loadRCatalogs(); loadRItems(); loadROrders();
+}
+function loadRCatalogs() {
+  api('GET', '/api/catalogs').then(cats => {
+    let html = `<input id="r-new-cat" placeholder="New catalog name" style="width:200px;display:inline-block">
+    <button onclick="createRCatalog()">Create Catalog</button><br><br>`;
+    cats.forEach(c => {
+      html += `<div><b>${c.name}</b> (slug:${c.slug}) — Public link: <a href="/catalog/${c.ownerId}/${c.slug}" target="_blank">/catalog/${c.ownerId}/${c.slug}</a></div>`;
+    });
+    document.getElementById('r-catalogs').innerHTML = html;
+    window.__rCatalogs = cats;
+  });
+}
+function createRCatalog() { api('POST', '/api/catalogs', { name: val('r-new-cat') }).then(() => loadRCatalogs()); }
+function loadRItems() {
+  api('GET', '/api/reseller/wholesaler-items').then(items => {
+    let html = `<div class="row"><input id="bulk-margin" placeholder="Bulk margin %"><input id="bulk-discount" placeholder="Bulk discount %">
+    <select id="bulk-catalog"></select><button onclick="bulkAdd()">Add selected to catalog</button></div>
+    <table><tr><th>Sel</th><th>Item No</th><th>Name</th><th>Wholesale Price</th></tr>`;
+    items.forEach(i => html += `<tr><td><input type="checkbox" class="item-chk" value="${i.id}"></td><td>${i.itemNo}</td><td>${i.productName}</td><td>${i.salePrice}</td></tr>`);
+    html += '</table>';
+    document.getElementById('r-items').innerHTML = html;
+    const sel = document.getElementById('bulk-catalog');
+    sel.innerHTML = (window.__rCatalogs||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  });
+}
+function bulkAdd() {
+  const ids = Array.from(document.querySelectorAll('.item-chk:checked')).map(c => c.value);
+  api('POST', '/api/reseller/catalog-items/bulk', {
+    catalogId: val('bulk-catalog'), wholesalerProductIds: ids,
+    marginPct: val('bulk-margin'), discountPct: val('bulk-discount')
+  }).then(d => alert(`Added ${d.count} items`)).catch(e => alert(e.message));
+}
+function loadROrders() {
+  api('GET', '/api/orders').then(os => {
+    let html = '<table><tr><th>Order No</th><th>Customer</th><th>Total</th><th>Forwarded</th><th>Action</th></tr>';
+    os.forEach(o => html += `<tr><td>${o.orderNo}</td><td>${o.customerName}</td><td>${o.total}</td><td>${o.forwardedToWholesaler}</td>
+    <td>${!o.forwardedToWholesaler ? `<button onclick="forwardOrder('${o.id}')">Forward to wholesaler</button>` : ''}</td></tr>`);
+    html += '</table>';
+    document.getElementById('r-orders').innerHTML = html;
+  });
+}
+function forwardOrder(id) { api('POST', `/api/orders/${id}/forward-to-wholesaler`).then(() => loadROrders()).catch(e=>alert(e.message)); }
+
+// ── ADMIN DASHBOARD ───────────────────────────────────────────────────
+function renderAdminDash() {
+  document.getElementById('app').innerHTML = `
+  <div class="card"><button class="danger" onclick="logout()" style="float:right">Logout</button>
+  <h3>Admin Dashboard</h3></div>
+  <div class="card"><h3>Wholesalers</h3><div id="a-wholesalers"></div></div>
+  <div class="card"><h3>Resellers</h3><div id="a-resellers"></div></div>`;
+  api('GET', '/api/admin/wholesalers').then(ws => {
+    document.getElementById('a-wholesalers').innerHTML = '<table><tr><th>Firm</th><th>UserId</th><th>Slug</th></tr>' +
+      ws.map(w => `<tr><td>${w.firmName}</td><td>${w.userId}</td><td>${w.slug}</td></tr>`).join('') + '</table>';
+  });
+  api('GET', '/api/admin/resellers').then(rs => {
+    document.getElementById('a-resellers').innerHTML = '<table><tr><th>Firm</th><th>UserId</th><th>Status</th></tr>' +
+      rs.map(r => `<tr><td>${r.firmName}</td><td>${r.userId}</td><td>${r.status}</td></tr>`).join('') + '</table>';
+  });
+}
+
+// ── PUBLIC CATALOG PAGE ───────────────────────────────────────────────
+function renderPublicCatalog(userId, slug) {
+  api('GET', `/api/public/${userId}/${slug}`).then(d => {
+    let html = `<div class="card"><h2>${d.owner.firmName}'s Catalog: ${d.catalog.name}</h2></div>`;
+    d.products.forEach(p => {
+      html += `<div class="product-card"><b>${p.productName}</b> (${p.itemNo})<br>
+      Category: ${p.category} | MRP: ${p.salePrice} | Price: ${p.discPrice || p.salePrice}
+      <div class="row"><input type="number" min="1" value="${p.minQty||1}" id="qty-${p.id}" style="width:60px">
+      <button onclick="addToCart('${p.id}')">Add to cart</button></div></div>`;
+    });
+    html += `<div class="card"><h3>Cart / Place Order</h3><div id="cart-items"></div>
+    <input id="cust-name" placeholder="Your Name">
+    <input id="cust-phone" placeholder="Phone">
+    <input id="cust-email" placeholder="Email">
+    <textarea id="cust-address" placeholder="Address"></textarea>
+    <button onclick="placeOrder('${d.catalog.id}')">Place Order</button>
+    <div id="order-msg"></div></div>`;
+    document.getElementById('app').innerHTML = html;
+    window.__pubProducts = d.products;
+    window.__cart = window.__cart || [];
+    renderCart();
+  }).catch(e => document.getElementById('app').innerHTML = `<div class="card msg err">${e.message}</div>`);
+}
+function addToCart(pid) {
+  const p = window.__pubProducts.find(x => x.id === pid);
+  const qty = Number(document.getElementById('qty-' + pid).value) || 1;
+  window.__cart.push({ itemNo: p.itemNo, productName: p.productName, qty, unit: p.unit, price: p.discPrice || p.salePrice });
+  renderCart();
+}
+function renderCart() {
+  const cart = window.__cart || [];
+  let html = '<table><tr><th>Item</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr>';
+  let total = 0;
+  cart.forEach(i => { total += i.price * i.qty; html += `<tr><td>${i.itemNo}</td><td>${i.qty}</td><td>${i.price}</td><td>${i.price*i.qty}</td></tr>`; });
+  html += `</table><b>Total: ${total}</b>`;
+  document.getElementById('cart-items').innerHTML = html;
+  window.__cartTotal = total;
+}
+function placeOrder(catalogId) {
+  api('POST', '/api/orders', {
+    catalogId, customerName: val('cust-name'), customerPhone: val('cust-phone'),
+    customerEmail: val('cust-email'), address: val('cust-address'),
+    items: window.__cart || [], total: window.__cartTotal || 0
+  }).then(d => document.getElementById('order-msg').innerHTML = `<div class="msg ok">Order placed! ${d.orderNo}</div>`)
+    .catch(e => document.getElementById('order-msg').innerHTML = `<div class="msg err">${e.message}</div>`);
+}
+
+render();
+</script>
+</body>
+</html>

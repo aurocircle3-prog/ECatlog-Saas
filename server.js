@@ -10,9 +10,10 @@ const XLSX      = require('xlsx');
 const cors      = require('cors');
 
 const app = express();
-const PORT       = process.env.PORT || 4000;
-const JWT_SECRET = process.env.JWT_SECRET || 'wholesale-reseller-secret-2025';
-const MONGO_URI  = process.env.MONGO_URI || '';
+const PORT        = process.env.PORT || 4000;
+const JWT_SECRET  = process.env.JWT_SECRET || 'wholesale-reseller-secret-2025';
+const MONGO_URI   = process.env.MONGO_URI || '';
+const CLOUDINARY_URL = process.env.CLOUDINARY_URL || ''; // optional: set in Render env vars
 
 app.use(cors());
 app.use(express.json());
@@ -306,6 +307,7 @@ app.post('/api/wholesaler/items', auth, wholesalerOnly, async (req, res) => {
       category: category||'', minQty: Number(minQty)||1, unit: unit||'Pcs',
       salePrice: Number(salePrice)||0, discPrice: 0,
       description: description||'', description2: description2||'',
+      active: req.body.active !== false && req.body.active !== 'false',
       ...customFields, sourceWholesalerProductId: null, createdAt: new Date().toISOString() };
     await DB.createProduct(p);
     res.json(p);
@@ -353,6 +355,8 @@ app.post('/api/wholesaler/items/import-csv', auth, wholesalerOnly, csvUploader.s
         customFields[k] = fd&&fd.enabled&&fd.name ? (fd.type==='number'?(parseFloat(col(row,fd.name))||0):col(row,fd.name)) : '';
       }
       const sp = col(row,'sellingprice','selling price','saleprice','sale price','price');
+      const activeVal = col(row,'active');
+      const isActive = activeVal === '' || activeVal.toLowerCase() === 'yes' || activeVal.toLowerCase() === 'true' || activeVal === '1';
       inserted.push({
         id:uuid(), catalogId:null, ownerId:req.user.id,
         itemNo, productName:col(row,'productname','product name','item name','name')||itemNo,
@@ -362,6 +366,7 @@ app.post('/api/wholesaler/items/import-csv', auth, wholesalerOnly, csvUploader.s
         unit:col(row,'unit')||'Pcs',
         salePrice:sp?parseFloat(sp):0, discPrice:0,
         description:col(row,'description','desc'), description2:col(row,'description2','desc2'),
+        active: isActive,
         ...customFields, sourceWholesalerProductId:null, createdAt:new Date().toISOString(),
       });
     });
@@ -397,7 +402,7 @@ app.put('/api/products/:id', auth, wholesalerOnly, async (req, res) => {
     if (!p) return res.status(404).json({ error: 'Not found' });
     if (p.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     const upd = {};
-    ['itemNo','productName','imageName','imageUrl','category','minQty','unit','salePrice','description','description2']
+    ['itemNo','productName','imageName','imageUrl','category','minQty','unit','salePrice','description','description2','active']
       .forEach(k => { if (req.body[k] !== undefined) upd[k] = req.body[k]; });
     for (let i = 1; i <= 13; i++) { const k = `field${i}`; if (req.body[k] !== undefined) upd[k] = req.body[k]; }
     await DB.updateProduct({ id: req.params.id }, upd);
@@ -417,13 +422,34 @@ app.delete('/api/products/:id', auth, wholesalerOnly, async (req, res) => {
 
 // ── IMAGE UPLOAD ──────────────────────────────────────────────────────────
 const imgUploader = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _f, cb) => { const d = path.join(__dirname,'public','uploads','images'); fs.mkdirSync(d,{recursive:true}); cb(null,d); },
-    filename: (req, _f, cb) => cb(null, req.params.id + path.extname(_f.originalname).toLowerCase()),
-  }),
+  storage: multer.memoryStorage(), // always buffer in memory; we decide where to save below
   limits: { fileSize: 5*1024*1024 },
   fileFilter: (_req, f, cb) => cb(null, /\.(jpg|jpeg|png|gif|webp)$/i.test(f.originalname)),
 });
+
+async function saveImage(productId, fileBuffer, originalName) {
+  if (CLOUDINARY_URL) {
+    // Upload to Cloudinary
+    const cloudinary = require('cloudinary').v2;
+    // CLOUDINARY_URL format: cloudinary://api_key:api_secret@cloud_name
+    cloudinary.config({ cloudinary_url: CLOUDINARY_URL });
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { public_id: `ecatlog/${productId}`, overwrite: true, resource_type: 'image' },
+        (err, res) => err ? reject(err) : resolve(res)
+      );
+      stream.end(fileBuffer);
+    });
+    return result.secure_url;
+  }
+  // Fallback: save to filesystem (not persistent on Render free tier)
+  const ext = path.extname(originalName).toLowerCase();
+  const dir = path.join(__dirname, 'public', 'uploads', 'images');
+  fs.mkdirSync(dir, { recursive: true });
+  const filename = productId + ext;
+  fs.writeFileSync(path.join(dir, filename), fileBuffer);
+  return '/uploads/images/' + filename;
+}
 
 app.post('/api/products/:id/image', auth, wholesalerOnly, imgUploader.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
@@ -431,8 +457,8 @@ app.post('/api/products/:id/image', auth, wholesalerOnly, imgUploader.single('im
     const p = await DB.findProduct({ id: req.params.id });
     if (!p) return res.status(404).json({ error: 'Not found' });
     if (p.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-    const imageUrl = '/uploads/images/' + req.file.filename;
-    await DB.updateProduct({ id: req.params.id }, { imageUrl, imageName: req.file.filename });
+    const imageUrl = await saveImage(req.params.id, req.file.buffer, req.file.originalname);
+    await DB.updateProduct({ id: req.params.id }, { imageUrl, imageName: req.file.originalname });
     res.json({ ok: true, imageUrl });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

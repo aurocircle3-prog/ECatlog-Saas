@@ -231,7 +231,7 @@ app.get('/api/wholesalers/by-slug/:slug', async (req, res) => {
 app.get('/api/wholesaler/field-schema', auth, wholesalerOnly, async (req, res) => {
   try {
     const user = await DB.findUser({ id: req.user.id });
-    res.json(user.fieldSchema || defaultFieldSchema());
+    res.json((user && user.fieldSchema) || defaultFieldSchema());
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -440,8 +440,11 @@ app.post('/api/catalogs/:catalogId/upload-csv', auth, wholesalerOnly, csvUploade
 
 // ── WHOLESALER: ITEM MASTER ───────────────────────────────────────────────
 app.get('/api/wholesaler/all-items', auth, wholesalerOnly, async (req, res) => {
-  try { res.json(await DB.findProducts({ ownerId: req.user.id })); }
-  catch(e) { res.status(500).json({ error: e.message }); }
+  try {
+    const user = await DB.findUser({ id: req.user.id });
+    if (!user) return res.status(401).json({ error: 'Session expired, please login again' });
+    res.json(await DB.findProducts({ ownerId: req.user.id }));
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/wholesaler/bulk-update-csv', auth, wholesalerOnly, csvUploader.single('csv'), async (req, res) => {
@@ -526,6 +529,7 @@ app.get('/api/wholesaler/wholesale-orders', auth, wholesalerOnly, async (req, re
 app.get('/api/reseller/wholesaler-items', auth, resellerOnly, async (req, res) => {
   try {
     const user = await DB.findUser({ id: req.user.id });
+    if (!user) return res.status(401).json({ error:'Session expired, please login again' });
     if (!user.wholesalerId) return res.status(400).json({ error:'No wholesaler linked' });
     const items = await DB.findProducts({ ownerId: user.wholesalerId });
     const wholesaler = await DB.findUser({ id: user.wholesalerId });

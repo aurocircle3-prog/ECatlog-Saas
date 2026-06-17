@@ -328,6 +328,7 @@ let TOKEN = localStorage.getItem('wrs_token') || '';
 let USER = JSON.parse(localStorage.getItem('wrs_user') || 'null');
 let __cart = [], __pubProducts = [], __pubCatalogId = '';
 let __activeTabs = [], __loadedTabs = {};
+let __sessionId = 0; // incremented on every login/logout — stale API callbacks check this
 
 // ── CORE ──────────────────────────────────────────────────────────────────
 function api(method, url, body, isForm) {
@@ -399,6 +400,7 @@ function render() {
   document.getElementById('nav-user-name').textContent = USER.firmName || USER.userId;
   document.getElementById('nav-role-badge').textContent = USER.role.toUpperCase();
   __loadedTabs = {};
+  __sessionId++;
   window.__fieldSchema = null; window.__itemMasterSchema = {}; __itemMasterData = [];
   if (USER.role === 'wholesaler') renderWholesalerDash();
   else if (USER.role === 'reseller') renderResellerDash();
@@ -640,7 +642,8 @@ function openCatalog(catId, catName, catSlug) {
   const el = document.getElementById('panel-w-catalogs');
   if (!el) return;
   // Pre-load schema for column headers
-  api('GET', '/api/wholesaler/field-schema').then(s => { window.__fieldSchema = s; }).catch(() => {});
+  const _sid = __sessionId;
+  api('GET', '/api/wholesaler/field-schema').then(s => { if (__sessionId === _sid) window.__fieldSchema = s; }).catch(() => {});
 
   el.innerHTML = `
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
@@ -817,17 +820,19 @@ function loadItemMaster() {
   const el = document.getElementById('panel-w-items');
   if (!el) return;
   el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
+  const sid = __sessionId;
   Promise.all([
     api('GET', '/api/wholesaler/all-items'),
     api('GET', '/api/wholesaler/field-schema'),
     api('GET', '/api/catalogs'),
   ]).then(([items, schema, cats]) => {
+    if (__sessionId !== sid) return; // stale — another user logged in before response arrived
     __itemMasterData = items;
     __itemMasterSchema = schema;
     window.__fieldSchema = schema;
     window.__wCatalogs = cats;
     renderItemMasterTable(items, schema, cats);
-  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
+  }).catch(e => { if (__sessionId === sid) el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
 }
 
 function renderItemMasterTable(items, schema, cats) {
@@ -1200,7 +1205,9 @@ function loadFieldSettings() {
   const el = document.getElementById('panel-w-fields');
   if (!el) return;
   el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
+  const sid = __sessionId;
   api('GET', '/api/wholesaler/field-schema').then(schema => {
+    if (__sessionId !== sid) return;
     window.__fieldSchema = schema;
     let rows = '';
     for (let i = 1; i <= 13; i++) {

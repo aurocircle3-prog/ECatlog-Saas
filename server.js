@@ -91,6 +91,11 @@ async function initMongoDB() {
 
     findWholesaleOrders: (q={}) => WOrder.find(q).lean().then(arr => arr.map(d => { delete d._id; return d; })),
     createWholesaleOrder: o => new WOrder(o).save().then(() => o),
+
+    deleteUsers:          q => User.deleteMany(q),
+    deleteCatalogs:       q => Cat.deleteMany(q),
+    deleteOrders:         q => Order.deleteMany(q),
+    deleteWholesaleOrders: q => WOrder.deleteMany(q),
   };
 }
 
@@ -129,6 +134,11 @@ function initLowDB() {
 
     findWholesaleOrders: (q={}) => wrap(db.get('wholesaleOrders').filter(q).value()),
     createWholesaleOrder: o => { db.get('wholesaleOrders').push(o).write(); return wrap(o); },
+
+    deleteUsers:          q => { db.get('users').remove(q).write(); return wrap(null); },
+    deleteCatalogs:       q => { db.get('catalogs').remove(q).write(); return wrap(null); },
+    deleteOrders:         q => { db.get('orders').remove(q).write(); return wrap(null); },
+    deleteWholesaleOrders: q => { db.get('wholesaleOrders').remove(q).write(); return wrap(null); },
   };
 }
 
@@ -648,6 +658,36 @@ app.post('/api/orders/:id/forward-to-wholesaler', auth, resellerOnly, async (req
 app.get('/api/admin/wholesalers', auth, adminOnly, async (req,res) => {
   try { res.json((await DB.findUsers({role:'wholesaler'})).map(safeUser)); }
   catch(e) { res.status(500).json({error:e.message}); }
+});
+
+app.delete('/api/admin/wholesalers/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const wId = req.params.id;
+    const w = await DB.findUser({ id: wId, role: 'wholesaler' });
+    if (!w) return res.status(404).json({ error: 'Wholesaler not found' });
+
+    // Cascade delete all wholesaler data
+    const cats = await DB.findCatalogs({ ownerId: wId });
+    for (const c of cats) await DB.deleteProducts({ catalogId: c.id });
+    await DB.deleteCatalogs({ ownerId: wId });
+
+    // Reseller-owned products & catalogs (resellers linked to this wholesaler)
+    const resellers = await DB.findUsers({ wholesalerId: wId, role: 'reseller' });
+    for (const r of resellers) {
+      const rCats = await DB.findCatalogs({ ownerId: r.id });
+      for (const c of rCats) await DB.deleteProducts({ catalogId: c.id });
+      await DB.deleteCatalogs({ ownerId: r.id });
+      await DB.deleteOrders({ ownerId: r.id });
+    }
+    await DB.deleteUsers({ wholesalerId: wId, role: 'reseller' });
+
+    // Wholesaler-level orders & user record
+    await DB.deleteWholesaleOrders({ wholesalerId: wId });
+    await DB.deleteUsers({ id: wId });
+
+    console.log(`Admin deleted wholesaler ${w.userId} (${wId}) and all associated data`);
+    res.json({ ok: true, message: `Wholesaler "${w.firmName}" and all their data deleted` });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/api/admin/resellers', auth, adminOnly, async (req,res) => {
   try { res.json((await DB.findUsers({role:'reseller'})).map(safeUser)); }

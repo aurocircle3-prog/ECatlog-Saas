@@ -94,6 +94,7 @@ async function initMongoDB() {
 
     findProduct:   q => Product.findOne(q).lean().then(d => d ? (delete d._id, d) : null),
     findProducts:  (q={}) => Product.find(q).lean().then(arr => arr.map(d => { delete d._id; return d; })),
+    findProductsByIds: (ids, extraQ={}) => Product.find({ id: { $in: ids }, ...extraQ }).lean().then(arr => arr.map(d => { delete d._id; return d; })),
     createProduct: p => new Product(p).save().then(() => p),
     bulkCreateProducts: arr => Product.insertMany(arr),
     updateProduct: (q, u) => Product.updateOne(q, { $set: u }),
@@ -137,6 +138,7 @@ function initLowDB() {
 
     findProduct:   q => wrap(db.get('products').find(q).value() || null),
     findProducts:  (q={}) => wrap(db.get('products').filter(q).value()),
+    findProductsByIds: (ids, extraQ={}) => wrap(db.get('products').filter(p => ids.includes(p.id) && Object.keys(extraQ).every(k => p[k]===extraQ[k])).value()),
     createProduct: p => { db.get('products').push(p).write(); return wrap(p); },
     bulkCreateProducts: arr => { arr.forEach(p => db.get('products').push(p).write()); return wrap(null); },
     updateProduct: (q, u) => { db.get('products').find(q).assign(u).write(); return wrap(null); },
@@ -332,11 +334,9 @@ app.get('/api/catalogs/:catalogId/products', auth, async (req, res) => {
     if (!cat) return res.status(404).json({ error: 'Catalog not found' });
     // New catalog system: itemIds array links to Item Master
     if (cat.itemIds && cat.itemIds.length) {
-      const all = [];
-      for (const iid of cat.itemIds) {
-        const p = await DB.findProduct({ id: iid, ownerId: cat.ownerId });
-        if (p && p.active !== false) all.push(p);
-      }
+      const fetched = await DB.findProductsByIds(cat.itemIds, { ownerId: cat.ownerId });
+      const idOrder = new Map(cat.itemIds.map((id,i) => [id,i]));
+      const all = fetched.filter(p => p.active !== false).sort((a,b) => (idOrder.get(a.id)||0)-(idOrder.get(b.id)||0));
       return res.json(all);
     }
     // Legacy: products stored with catalogId
@@ -778,11 +778,9 @@ app.get('/api/reseller/catalogs/:id/items', auth, resellerOnly, async (req, res)
   try {
     const cat = await DB.findCatalog({ id: req.params.id });
     if (!cat || cat.ownerId !== req.user.id) return res.status(404).json({ error: 'Catalog not found' });
-    const items = [];
-    for (const iid of (cat.itemIds || [])) {
-      const p = await DB.findProduct({ id: iid });
-      if (p) items.push(p);
-    }
+    const items = (cat.itemIds && cat.itemIds.length)
+      ? await DB.findProductsByIds(cat.itemIds)
+      : [];
     res.json({ items, cat });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -841,25 +839,21 @@ app.get('/api/public/:userId/:slug', async (req, res) => {
 
     let products = [];
     if (cat.itemIds && cat.itemIds.length) {
-      // New itemIds system: resolve from Item Master
-      // For reseller catalogs, items are owned by the wholesaler
+      // New itemIds system: resolve from Item Master — single bulk query
       const itemOwnerId = (owner.role==='reseller') ? wholesalerUser.id : owner.id;
-      for (const iid of cat.itemIds) {
-        const p = await DB.findProduct({ id: iid, ownerId: itemOwnerId });
-        if (p && p.active !== false) {
-          // Apply catalog margin/discount for reseller catalogs
-          if (owner.role==='reseller' && (cat.marginPct || cat.discountPct)) {
-            const wsp = Number(p.salePrice) || 0;
-            const margin = Number(cat.marginPct)||0;
-            const discount = Number(cat.discountPct)||0;
-            const sellingPrice = round2(wsp * (1 + margin/100));
-            const mrpPrice = discount > 0 ? round2(sellingPrice / (1 - discount/100)) : sellingPrice;
-            products.push({ ...p, _wsp: wsp, _sellingPrice: sellingPrice, _mrp: mrpPrice, _catalogMargin: margin, _catalogDiscount: discount });
-          } else {
-            products.push(p);
-          }
-        }
-      }
+      const fetched = await DB.findProductsByIds(cat.itemIds, { ownerId: itemOwnerId });
+      const idOrder = new Map(cat.itemIds.map((id,i) => [id,i]));
+      const active = fetched.filter(p => p.active !== false).sort((a,b) => (idOrder.get(a.id)||0)-(idOrder.get(b.id)||0));
+      const isResellerCat = owner.role==='reseller' && (cat.marginPct || cat.discountPct);
+      products = active.map(p => {
+        if (!isResellerCat) return p;
+        const wsp = Number(p.salePrice) || 0;
+        const margin = Number(cat.marginPct)||0;
+        const discount = Number(cat.discountPct)||0;
+        const sellingPrice = round2(wsp * (1 + margin/100));
+        const mrpPrice = discount > 0 ? round2(sellingPrice / (1 - discount/100)) : sellingPrice;
+        return { ...p, _wsp: wsp, _sellingPrice: sellingPrice, _mrp: mrpPrice };
+      });
     } else {
       // Legacy: products stored with catalogId
       products = (await DB.findProducts({ catalogId:cat.id })).filter(p => p.active !== false);

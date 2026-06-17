@@ -311,9 +311,14 @@ app.post('/api/catalogs', auth, async (req, res) => {
     } else if (req.user.role !== 'wholesaler') {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    const { name } = req.body;
+    const { name, validFrom, expiryDate, description, marginPct, discountPct } = req.body;
     if (!name) return res.status(400).json({ error: 'name required' });
-    const cat = { id: uuid(), ownerId: req.user.id, name, slug: slugify(name)+'-'+Math.random().toString(36).substring(2,6), status:'active', createdAt:new Date().toISOString() };
+    const cat = { id: uuid(), ownerId: req.user.id, name, slug: slugify(name)+'-'+Math.random().toString(36).substring(2,6), status:'active', createdAt:new Date().toISOString(),
+      ...(validFrom && { validFrom }), ...(expiryDate && { expiryDate }),
+      ...(description && { description }),
+      ...(marginPct !== undefined && { marginPct: Number(marginPct)||0 }),
+      ...(discountPct !== undefined && { discountPct: Number(discountPct)||0 }),
+    };
     await DB.createCatalog(cat);
     res.json(cat);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -739,6 +744,44 @@ app.get('/api/reseller/wholesaler-items', auth, resellerOnly, async (req, res) =
     const wholesaler = await DB.findUser({ id: user.wholesalerId });
     const schema = wholesaler ? (wholesaler.fieldSchema || defaultFieldSchema()) : defaultFieldSchema();
     res.json({ items, schema });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Reseller: add wholesaler Item Master items to their catalog by itemIds
+app.post('/api/reseller/catalogs/:id/items', auth, approvedResellerOnly, async (req, res) => {
+  try {
+    const cat = await DB.findCatalog({ id: req.params.id });
+    if (!cat || cat.ownerId !== req.user.id) return res.status(404).json({ error: 'Catalog not found' });
+    const { itemIds } = req.body;
+    if (!Array.isArray(itemIds)) return res.status(400).json({ error: 'itemIds array required' });
+    const existing = cat.itemIds || [];
+    const merged = Array.from(new Set([...existing, ...itemIds]));
+    await DB.updateCatalog({ id: req.params.id }, { itemIds: merged });
+    res.json({ ok: true, itemIds: merged });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/reseller/catalogs/:catalogId/items/:itemId', auth, approvedResellerOnly, async (req, res) => {
+  try {
+    const cat = await DB.findCatalog({ id: req.params.catalogId });
+    if (!cat || cat.ownerId !== req.user.id) return res.status(404).json({ error: 'Catalog not found' });
+    const itemIds = (cat.itemIds || []).filter(id => id !== req.params.itemId);
+    await DB.updateCatalog({ id: req.params.catalogId }, { itemIds });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Reseller: get catalog items (from wholesaler's item master)
+app.get('/api/reseller/catalogs/:id/items', auth, resellerOnly, async (req, res) => {
+  try {
+    const cat = await DB.findCatalog({ id: req.params.id });
+    if (!cat || cat.ownerId !== req.user.id) return res.status(404).json({ error: 'Catalog not found' });
+    const items = [];
+    for (const iid of (cat.itemIds || [])) {
+      const p = await DB.findProduct({ id: iid });
+      if (p) items.push(p);
+    }
+    res.json({ items, cat });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

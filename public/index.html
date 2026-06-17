@@ -849,6 +849,7 @@ function renderItemMasterTable(items, schema, cats) {
       <button class="btn btn-outline btn-sm" onclick="showImCsvImport()">Import CSV</button>
       <button class="btn btn-outline btn-sm" onclick="showImBulkEdit()">Bulk Edit CSV</button>
       <button class="btn btn-outline btn-sm" onclick="downloadItemsCsv()">Download CSV</button>
+      <button class="btn btn-outline btn-sm" onclick="showBulkImageImport()">📷 Bulk Images</button>
     </div>
   </div>
 
@@ -1053,12 +1054,16 @@ function showImAddItem() {
     </div>
     <div id="im-add-msg"></div>
     <div class="frow">
-      <div class="fgd"><label>Item Code *</label><input class="inp inp-full" id="im-add-itemNo" placeholder="SKU001"></div>
+      <div class="fgd"><label>Item Code *</label><input class="inp inp-full" id="im-add-itemNo" placeholder="SKU001" oninput="autoFillImageName()"></div>
       <div class="fgd"><label>Item Name</label><input class="inp inp-full" id="im-add-productName" placeholder="Product name"></div>
     </div>
     <div class="frow">
-      <div class="fgd"><label>Image</label><input type="file" class="inp inp-full" id="im-add-image" accept="image/*"></div>
+      <div class="fgd"><label>Image Name <span style="font-size:10px;color:#888;">(used for file matching)</span></label><input class="inp inp-full" id="im-add-imageName" placeholder="e.g. SKU001"></div>
       <div class="fgd"><label>Active</label><select class="inp inp-full" id="im-add-active"><option value="true" selected>Yes</option><option value="false">No</option></select></div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px;">Thumbnail</label>
+      <input type="file" class="inp" id="im-add-image" accept="image/*" style="width:auto;">
     </div>
     ${customHtml}
     <div style="margin-top:14px;"><button class="btn btn-dark btn-sm" onclick="btnAction(this,submitAddItem)">Add Item</button></div>
@@ -1066,6 +1071,12 @@ function showImAddItem() {
 }
 
 function hideImPanel() { const p = document.getElementById('im-panel'); if (p) p.innerHTML = ''; }
+function autoFillImageName() {
+  const code = document.getElementById('im-add-itemNo')?.value?.trim() || '';
+  const nameEl = document.getElementById('im-add-imageName');
+  if (nameEl && !nameEl.dataset.manual) nameEl.value = code.replace(/[^a-zA-Z0-9_-]/g,'_');
+}
+document.addEventListener('input', e => { if (e.target && e.target.id === 'im-add-imageName') e.target.dataset.manual = '1'; });
 
 function submitAddItem() {
   const msgEl = document.getElementById('im-add-msg');
@@ -1073,19 +1084,22 @@ function submitAddItem() {
   const itemNo = document.getElementById('im-add-itemNo')?.value?.trim();
   if (!itemNo) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code is required.</div>'; return Promise.resolve(); }
   const schema = __itemMasterSchema;
+  const imageName = (document.getElementById('im-add-imageName')?.value?.trim() || itemNo).replace(/[^a-zA-Z0-9_-]/g,'_');
   const body = {
     itemNo, productName: document.getElementById('im-add-productName')?.value||'',
+    imageName,
     active: document.getElementById('im-add-active')?.value !== 'false',
   };
   for (let i = 1; i <= 13; i++) {
     const f = schema[`field${i}`];
     if (f && f.enabled && f.name) { const v = document.getElementById(`im-add-field${i}`)?.value; if (v) body[`field${i}`] = v; }
   }
-  return api('POST', '/api/wholesaler/items', body).then(p => {
+  return api('POST', '/api/wholesaler/items', body).then(async p => {
     const imgFile = document.getElementById('im-add-image')?.files?.[0];
     if (imgFile) {
-      const fd = new FormData(); fd.append('image', imgFile);
-      return api('POST', `/api/products/${p.id}/image`, fd, true).then(() => p);
+      const resized = await resizeImage(imgFile, imageName);
+      const fd = new FormData(); fd.append('image', resized); fd.append('slot', '0');
+      await api('POST', `/api/products/${p.id}/image`, fd, true);
     }
     return p;
   }).then(() => {
@@ -1116,27 +1130,7 @@ function openEditItem(id) {
     }
     customHtml = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;">${pairs.join('')}</div>`;
   }
-  // Multi-image slots: slot 0 = Thumbnail, slots 1-4 = additional images
-  const imgSlots = [
-    { label: 'Thumbnail', key: 'imageUrl', slot: 0 },
-    { label: 'Image 1', key: 'image1Url', slot: 1 },
-    { label: 'Image 2', key: 'image2Url', slot: 2 },
-    { label: 'Image 3', key: 'image3Url', slot: 3 },
-    { label: 'Image 4', key: 'image4Url', slot: 4 },
-  ];
-  const imgSlotsHtml = imgSlots.map(s => {
-    const url = p[s.key];
-    const inner = url
-      ? `<div style="position:relative;display:inline-block;">
-           <img src="${url}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
-           <button onclick="deleteImgSlot('${p.id}',${s.slot})" style="position:absolute;top:-6px;right:-6px;background:#e53e3e;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:17px;">✕</button>
-         </div>`
-      : `<label style="display:flex;width:72px;height:72px;border:2px dashed #ccc;border-radius:6px;align-items:center;justify-content:center;font-size:28px;color:#bbb;cursor:pointer;">
-           +<input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage('${p.id}',${s.slot},this)">
-         </label>`;
-    return `<div style="text-align:center;"><div style="font-size:10px;color:#777;margin-bottom:4px;">${s.label}</div>${inner}</div>`;
-  }).join('');
-  const imgPreview = `<div id="eim-img-slots" style="display:flex;gap:8px;flex-wrap:wrap;">${imgSlotsHtml}</div>`;
+  const imgPreview = buildImgSlotsHtml(p);
 
   const panel = document.getElementById('im-panel');
   if (!panel) return;
@@ -1152,7 +1146,10 @@ function openEditItem(id) {
           <div class="fgd"><label>Item Code *</label><input class="inp inp-full" id="eim-itemNo" value="${p.itemNo}"></div>
           <div class="fgd"><label>Item Name</label><input class="inp inp-full" id="eim-productName" value="${p.productName||''}"></div>
         </div>
-        <div class="fgd"><label>Active</label><select class="inp" id="eim-active" style="width:160px;"><option value="true" ${p.active!==false?'selected':''}>Yes</option><option value="false" ${p.active===false?'selected':''}>No</option></select></div>
+        <div class="frow">
+          <div class="fgd"><label>Image Name <span style="font-size:10px;color:#888;">(base name for images)</span></label><input class="inp inp-full" id="eim-imageName" value="${p.imageName||p.itemNo||''}"></div>
+          <div class="fgd"><label>Active</label><select class="inp inp-full" id="eim-active"><option value="true" ${p.active!==false?'selected':''}>Yes</option><option value="false" ${p.active===false?'selected':''}>No</option></select></div>
+        </div>
         ${customHtml}
       </div>
       <div style="flex-shrink:0;">
@@ -1175,6 +1172,7 @@ function saveItemEdit(id) {
   const body = {
     itemNo: document.getElementById('eim-itemNo')?.value?.trim(),
     productName: document.getElementById('eim-productName')?.value||'',
+    imageName: document.getElementById('eim-imageName')?.value?.trim()||'',
     active: document.getElementById('eim-active')?.value !== 'false',
   };
   if (!body.itemNo) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code required.</div>'; return Promise.resolve(); }
@@ -1187,6 +1185,92 @@ function saveItemEdit(id) {
     hideImPanel();
     __loadedTabs['w-items'] = false; loadTab('w-items');
   }).catch(e => { msgEl.innerHTML = `<div class="err-msg" style="display:block;">${e.message}</div>`; });
+}
+
+function buildImgSlotsHtml(p) {
+  const thumbHtml = p.imageUrl
+    ? `<div style="position:relative;display:inline-block;">
+         <img src="${p.imageUrl}" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid #ddd;">
+         <button onclick="deleteImgSlot('${p.id}',0)" style="position:absolute;top:-7px;right:-7px;background:#e53e3e;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:19px;font-weight:bold;">✕</button>
+       </div>
+       <label class="btn btn-outline btn-sm" style="cursor:pointer;margin-top:6px;">Upload thumbnail<input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage('${p.id}',0,this)"></label>`
+    : `<label style="display:flex;flex-direction:column;width:90px;height:90px;border:2px dashed #bbb;border-radius:8px;align-items:center;justify-content:center;font-size:11px;color:#999;cursor:pointer;gap:4px;">
+         📷<span>Upload thumbnail</span>
+         <input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage('${p.id}',0,this)">
+       </label>`;
+
+  const otherKeys = ['image1Url','image2Url','image3Url','image4Url'];
+  const otherImgs = otherKeys.map((k,i) => p[k]
+    ? `<div style="position:relative;display:inline-block;">
+         <img src="${p[k]}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
+         <div style="display:flex;gap:2px;margin-top:4px;justify-content:center;">
+           <button onclick="moveImgSlot('${p.id}',${i+1},'left')" style="border:1px solid #ccc;background:#fff;border-radius:3px;padding:1px 5px;cursor:pointer;font-size:11px;">◀</button>
+           <button onclick="moveImgSlot('${p.id}',${i+1},'right')" style="border:1px solid #ccc;background:#fff;border-radius:3px;padding:1px 5px;cursor:pointer;font-size:11px;">▶</button>
+           <button onclick="deleteImgSlot('${p.id}',${i+1})" style="border:1px solid #e53e3e;background:#fff;color:#e53e3e;border-radius:3px;padding:1px 5px;cursor:pointer;font-size:11px;">✕</button>
+         </div>
+       </div>`
+    : `<label style="display:flex;width:72px;height:72px;border:2px dashed #ddd;border-radius:6px;align-items:center;justify-content:center;font-size:24px;color:#ccc;cursor:pointer;">
+         +<input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage('${p.id}',${i+1},this)">
+       </label>`
+  );
+
+  // Multi-upload for other images
+  const multiHtml = `<label class="btn btn-outline btn-sm" style="cursor:pointer;margin-bottom:8px;">
+    Upload other images (up to 4 at once)
+    <input type="file" accept="image/*" multiple style="display:none;" onchange="uploadMultiImages('${p.id}',this)">
+  </label>`;
+
+  return `<div id="eim-img-slots">
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:600;color:#555;margin-bottom:6px;">Thumbnail (First image)</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;">${thumbHtml}</div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:600;color:#555;margin-bottom:6px;">Other images <span style="font-weight:normal;color:#999;">(max 4 · use arrows to reorder)</span></div>
+      ${multiHtml}
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">${otherImgs.join('')}</div>
+    </div>
+    <div id="eim-img-msg" style="font-size:11px;margin-top:8px;color:#888;"></div>
+  </div>`;
+}
+
+async function uploadMultiImages(id, fileInput) {
+  const files = Array.from(fileInput.files || []).slice(0, 4);
+  if (!files.length) return;
+  const item = __itemMasterData.find(x => x.id === id);
+  if (!item) return;
+  const msgEl = document.getElementById('eim-img-msg');
+  if (msgEl) msgEl.textContent = `Uploading ${files.length} image(s)...`;
+  const slots = [1,2,3,4];
+  const emptySlots = slots.filter(s => !item[`image${s}Url`]);
+  let uploaded = 0;
+  for (let i = 0; i < files.length && i < emptySlots.length; i++) {
+    const slot = emptySlots[i];
+    const baseName = (item.imageName || item.itemNo || id).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const resized = await resizeImage(files[i], `${baseName}_${slot}`);
+    const fd = new FormData(); fd.append('image', resized); fd.append('slot', String(slot));
+    const d = await api('POST', `/api/products/${id}/image`, fd, true);
+    item[`image${slot}Url`] = d.imageUrl;
+    uploaded++;
+  }
+  if (msgEl) msgEl.innerHTML = `<span style="color:#16a34a;">✓ ${uploaded} image(s) uploaded</span>`;
+  const slotsEl = document.getElementById('eim-img-slots');
+  if (slotsEl) slotsEl.outerHTML = buildImgSlotsHtml(item);
+}
+
+async function moveImgSlot(id, slot, dir) {
+  const item = __itemMasterData.find(x => x.id === id);
+  if (!item) return;
+  const slots = [1,2,3,4];
+  const idx = slots.indexOf(slot);
+  const swapIdx = dir === 'left' ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= slots.length) return;
+  const kA = `image${slots[idx]}Url`, kB = `image${slots[swapIdx]}Url`;
+  [item[kA], item[kB]] = [item[kB], item[kA]];
+  // persist swap
+  await api('PUT', `/api/products/${id}`, { [kA]: item[kA]||null, [kB]: item[kB]||null }).catch(()=>{});
+  const slotsEl = document.getElementById('eim-img-slots');
+  if (slotsEl) slotsEl.outerHTML = buildImgSlotsHtml(item);
 }
 
 function resizeImage(file, filename) {
@@ -1217,9 +1301,12 @@ function resizeImage(file, filename) {
 async function uploadItemImage(id, slot, fileInput) {
   const f = fileInput || document.getElementById('eim-image-file');
   if (!f || !f.files[0]) return;
+  const item = __itemMasterData.find(x => x.id === id);
+  const baseName = (item && (item.imageName || item.itemNo) || id).replace(/[^a-zA-Z0-9_-]/g,'_');
+  const fname = slot ? `${baseName}_${slot}` : baseName;
   const msgEl = document.getElementById('eim-img-msg');
   if (msgEl) msgEl.textContent = 'Uploading...';
-  const resized = await resizeImage(f.files[0], `img-${id}-slot${slot||0}`);
+  const resized = await resizeImage(f.files[0], fname);
   const fd = new FormData();
   fd.append('image', resized);
   if (slot !== undefined && slot !== null) fd.append('slot', slot);
@@ -1259,30 +1346,11 @@ async function uploadItemImage(id, slot, fileInput) {
 function deleteImgSlot(id, slot) {
   const item = __itemMasterData.find(x => x.id === id);
   if (!item) return;
-  if (slot === 0) { item.imageUrl = null; } else { item[`image${slot}Url`] = null; }
-  // Re-render slots
+  const key = slot === 0 ? 'imageUrl' : `image${slot}Url`;
+  item[key] = null;
+  api('PUT', `/api/products/${id}`, { [key]: null }).catch(()=>{});
   const slotsEl = document.getElementById('eim-img-slots');
-  if (slotsEl) {
-    const imgSlots = [
-      { label: 'Thumbnail', key: 'imageUrl', slot: 0 },
-      { label: 'Image 1', key: 'image1Url', slot: 1 },
-      { label: 'Image 2', key: 'image2Url', slot: 2 },
-      { label: 'Image 3', key: 'image3Url', slot: 3 },
-      { label: 'Image 4', key: 'image4Url', slot: 4 },
-    ];
-    slotsEl.innerHTML = imgSlots.map(s => {
-      const url = item[s.key];
-      const inner = url
-        ? `<div style="position:relative;display:inline-block;">
-             <img src="${url}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
-             <button onclick="deleteImgSlot('${id}',${s.slot})" style="position:absolute;top:-6px;right:-6px;background:#e53e3e;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:17px;">✕</button>
-           </div>`
-        : `<label style="display:flex;width:72px;height:72px;border:2px dashed #ccc;border-radius:6px;align-items:center;justify-content:center;font-size:28px;color:#bbb;cursor:pointer;">
-             +<input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage('${id}',${s.slot},this)">
-           </label>`;
-      return `<div style="text-align:center;"><div style="font-size:10px;color:#777;margin-bottom:4px;">${s.label}</div>${inner}</div>`;
-    }).join('');
-  }
+  if (slotsEl) slotsEl.outerHTML = buildImgSlotsHtml(item);
 }
 
 function toggleActive(id, currentlyActive) {
@@ -1359,6 +1427,74 @@ function submitImCsvImport() {
     </div>`;
     __loadedTabs['w-items'] = false; loadTab('w-items');
   }).catch(e => { resEl.innerHTML = `<div style="background:#fce8e8;border-radius:8px;padding:12px;font-size:12px;color:#c0392b;">✗ ${e.message}</div>`; });
+}
+
+function showBulkImageImport() {
+  const panel = document.getElementById('im-panel');
+  if (!panel) return;
+  panel.innerHTML = `<div class="card" style="border:2px solid #6366f1;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div class="card-title" style="margin:0;">📷 Bulk Image Import</div>
+      <button class="btn btn-outline btn-sm" onclick="hideImPanel()">✕ Close</button>
+    </div>
+    <div style="background:#eef2ff;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#3730a3;">
+      <b>How it works:</b><br>
+      • File named <code>SKU001.jpg</code> → Thumbnail for item with Image Name = <b>SKU001</b><br>
+      • File named <code>SKU001_1.jpg</code>, <code>SKU001_2.jpg</code>… → Additional images (slots 1–4)<br>
+      • Image Name defaults to Item Code. Set it in Edit Item if different.<br>
+      • Images are auto-resized before upload.
+    </div>
+    <div style="border:2px dashed #c7d2fe;border-radius:8px;padding:20px;text-align:center;margin-bottom:12px;">
+      <input type="file" id="bulk-img-files" accept="image/*" multiple style="width:100%;">
+      <div style="font-size:11px;color:#888;margin-top:6px;">Select multiple images at once</div>
+    </div>
+    <button class="btn btn-dark btn-sm" onclick="btnAction(this,submitBulkImageImport)">Upload & Map Images</button>
+    <div id="bulk-img-result" style="margin-top:12px;font-size:12px;"></div>
+  </div>`;
+}
+
+async function submitBulkImageImport() {
+  const input = document.getElementById('bulk-img-files');
+  if (!input || !input.files.length) { toast('Select images first', true); return; }
+  const files = Array.from(input.files);
+  const resEl = document.getElementById('bulk-img-result');
+  resEl.innerHTML = `<div style="color:#888;">Processing ${files.length} file(s)...</div>`;
+
+  // Build lookup: imageName -> item
+  const lookup = {};
+  __itemMasterData.forEach(p => {
+    const base = (p.imageName || p.itemNo || '').replace(/[^a-zA-Z0-9_-]/g,'_').toLowerCase();
+    if (base) lookup[base] = p;
+  });
+
+  let matched = 0, skipped = 0, errors = [];
+  for (const file of files) {
+    const nameNoExt = file.name.replace(/\.[^.]+$/,'');
+    // Check if it's a slotted name (e.g. SKU001_1, SKU001_2)
+    const slotMatch = nameNoExt.match(/^(.+)_([1-4])$/);
+    let base, slot;
+    if (slotMatch) { base = slotMatch[1].toLowerCase(); slot = parseInt(slotMatch[2]); }
+    else { base = nameNoExt.toLowerCase(); slot = 0; }
+
+    const item = lookup[base];
+    if (!item) { skipped++; continue; }
+
+    try {
+      const fname = slot === 0 ? base : `${base}_${slot}`;
+      const resized = await resizeImage(file, fname);
+      const fd = new FormData(); fd.append('image', resized); fd.append('slot', String(slot));
+      const d = await api('POST', `/api/products/${item.id}/image`, fd, true);
+      if (slot === 0) item.imageUrl = d.imageUrl;
+      else item[`image${slot}Url`] = d.imageUrl;
+      matched++;
+    } catch(e) { errors.push(`${file.name}: ${e.message}`); }
+  }
+
+  resEl.innerHTML = `<div style="background:#e8f5ec;border-radius:8px;padding:12px;color:#16a34a;">
+    <b>✓ ${matched} image(s) uploaded</b>${skipped ? ` · ${skipped} skipped (no matching item)` : ''}
+    ${errors.length ? `<div style="color:#c0392b;margin-top:4px;">${errors.slice(0,5).join('<br>')}</div>` : ''}
+  </div>`;
+  if (matched) { __loadedTabs['w-items'] = false; loadTab('w-items'); }
 }
 
 function showImBulkEdit() {

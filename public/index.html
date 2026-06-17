@@ -593,17 +593,23 @@ function loadWCatalogs() {
     if (!cats.length) {
       html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No catalogs yet. Click "+ New Catalog" to create one.</div>';
     } else {
-      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">';
       cats.forEach(c => {
+        const link = `${location.origin}/catalog/${c.ownerId}/${c.slug}`;
         html += `
-        <div class="card" style="cursor:pointer;margin-bottom:0;" onclick="openCatalog('${c.id}','${c.name.replace(/'/g,"\\'")}','${c.slug}')">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div class="card" style="margin-bottom:0;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
             <div>
-              <div style="font-size:16px;font-weight:800;color:#111;">${c.name}</div>
+              <div style="font-size:15px;font-weight:800;color:#111;">${c.name}</div>
               <div style="font-size:11px;color:#888;margin-top:2px;">Slug: ${c.slug}</div>
             </div>
-            <span style="font-size:11px;background:#f0f4ff;color:#2e3192;padding:3px 8px;border-radius:6px;font-weight:600;">Manage →</span>
+            <button class="btn btn-dark btn-sm" onclick="openCatalog('${c.id}','${c.name.replace(/'/g,"\\'")}','${c.slug}')">Manage →</button>
           </div>
+          <div class="link-box" style="margin-bottom:8px;">
+            <span class="link-url" style="font-size:11px;">${link}</span>
+            <button class="btn btn-outline btn-sm" onclick="copyLink('/catalog/${c.ownerId}/${c.slug}')">Copy</button>
+          </div>
+          <a href="${link}" target="_blank" class="btn btn-outline btn-sm" style="font-size:12px;">🔗 View Public Catalog</a>
         </div>`;
       });
       html += '</div>';

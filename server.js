@@ -311,9 +311,10 @@ app.post('/api/catalogs', auth, async (req, res) => {
     } else if (req.user.role !== 'wholesaler') {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    const { name, validFrom, expiryDate, description, marginPct, discountPct } = req.body;
+    const { name, slug: customSlug, validFrom, expiryDate, description, marginPct, discountPct } = req.body;
     if (!name) return res.status(400).json({ error: 'name required' });
-    const cat = { id: uuid(), ownerId: req.user.id, name, slug: slugify(name)+'-'+Math.random().toString(36).substring(2,6), status:'active', createdAt:new Date().toISOString(),
+    const baseSlug = customSlug ? slugify(customSlug) : slugify(name);
+    const cat = { id: uuid(), ownerId: req.user.id, name, slug: baseSlug+'-'+Math.random().toString(36).substring(2,6), status:'active', createdAt:new Date().toISOString(),
       ...(validFrom && { validFrom }), ...(expiryDate && { expiryDate }),
       ...(description && { description }),
       ...(marginPct !== undefined && { marginPct: Number(marginPct)||0 }),
@@ -740,7 +741,8 @@ app.get('/api/reseller/wholesaler-items', auth, resellerOnly, async (req, res) =
     const user = await DB.findUser({ id: req.user.id });
     if (!user) return res.status(401).json({ error:'Session expired, please login again' });
     if (!user.wholesalerId) return res.status(400).json({ error:'No wholesaler linked' });
-    const items = await DB.findProducts({ ownerId: user.wholesalerId });
+    const allItems = await DB.findProducts({ ownerId: user.wholesalerId });
+    const items = allItems.filter(p => p.active !== false && p.catalogId === null || p.active !== false && !p.catalogId);
     const wholesaler = await DB.findUser({ id: user.wholesalerId });
     const schema = wholesaler ? (wholesaler.fieldSchema || defaultFieldSchema()) : defaultFieldSchema();
     res.json({ items, schema });
@@ -828,12 +830,35 @@ app.get('/api/public/:userId/:slug', async (req, res) => {
     const cat = await DB.findCatalog({ ownerId:owner.id, slug:req.params.slug });
     if (!cat) return res.status(404).json({ error:'Catalog not found' });
 
+    let schema = defaultFieldSchema();
+    let wholesalerUser = owner;
+    if (owner.role==='reseller' && owner.wholesalerId) {
+      const w = await DB.findUser({ id: owner.wholesalerId });
+      if (w) { schema = w.fieldSchema||defaultFieldSchema(); wholesalerUser = w; }
+    } else if (owner.role==='wholesaler') {
+      schema = owner.fieldSchema||defaultFieldSchema();
+    }
+
     let products = [];
     if (cat.itemIds && cat.itemIds.length) {
-      // New system: resolve from Item Master, exclude inactive
+      // New itemIds system: resolve from Item Master
+      // For reseller catalogs, items are owned by the wholesaler
+      const itemOwnerId = (owner.role==='reseller') ? wholesalerUser.id : owner.id;
       for (const iid of cat.itemIds) {
-        const p = await DB.findProduct({ id: iid, ownerId: owner.id });
-        if (p && p.active !== false) products.push(p);
+        const p = await DB.findProduct({ id: iid, ownerId: itemOwnerId });
+        if (p && p.active !== false) {
+          // Apply catalog margin/discount for reseller catalogs
+          if (owner.role==='reseller' && (cat.marginPct || cat.discountPct)) {
+            const wsp = Number(p.salePrice) || 0;
+            const margin = Number(cat.marginPct)||0;
+            const discount = Number(cat.discountPct)||0;
+            const sellingPrice = round2(wsp * (1 + margin/100));
+            const mrpPrice = discount > 0 ? round2(sellingPrice / (1 - discount/100)) : sellingPrice;
+            products.push({ ...p, _wsp: wsp, _sellingPrice: sellingPrice, _mrp: mrpPrice, _catalogMargin: margin, _catalogDiscount: discount });
+          } else {
+            products.push(p);
+          }
+        }
       }
     } else {
       // Legacy: products stored with catalogId
@@ -849,10 +874,8 @@ app.get('/api/public/:userId/:slug', async (req, res) => {
           if (fld.formula && fld.show !== false) {
             try {
               const expr = fld.formula.replace(/\{([^}]+)\}/g, (_, name) => {
-                // find field key by label
-                const entry = Object.entries(out).find(([k, v]) => k === name || String(v) === name);
+                const entry = Object.entries(out).find(([k]) => k === name);
                 if (entry) return Number(entry[1]) || 0;
-                // also try matching against schema field names
                 return 0;
               });
               out[fld.key + '_computed'] = eval(expr); // eslint-disable-line no-eval
@@ -863,14 +886,6 @@ app.get('/api/public/:userId/:slug', async (req, res) => {
       });
     }
 
-    let schema = defaultFieldSchema();
-    let wholesalerUser = owner;
-    if (owner.role==='reseller'&&owner.wholesalerId) {
-      const w = await DB.findUser({ id:owner.wholesalerId });
-      if (w) { schema = w.fieldSchema||defaultFieldSchema(); wholesalerUser = w; }
-    } else if (owner.role==='wholesaler') {
-      schema = owner.fieldSchema||defaultFieldSchema();
-    }
     // Use wholesaler's global display format (overrides per-catalog)
     const displayFormat = wholesalerUser.displayFormat || df;
     res.json({ catalog:cat, owner:safeUser(owner), products, schema, displayFormat });

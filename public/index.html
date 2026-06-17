@@ -2222,21 +2222,42 @@ function loadRCatalogs() {
     </div>
     <div class="card" id="r-new-cat-form" style="display:none;margin-bottom:16px;">
       <div class="card-title">Create New Catalog</div>
-      <div style="display:flex;gap:10px;">
-        <input class="inp" id="r-new-cat" placeholder="Catalog name" style="flex:1;">
-        <button class="btn btn-dark btn-sm" onclick="createRCatalog()">Create</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="fgd"><label>Catalog Name *</label><input class="inp" id="r-cat-name" placeholder="e.g. Summer 2025"></div>
+        <div class="fgd"><label>Catalog Code</label><input class="inp" id="r-cat-code" placeholder="e.g. SUM25 (auto if blank)"></div>
+        <div class="fgd"><label>Valid From</label><input class="inp" type="date" id="r-cat-from"></div>
+        <div class="fgd"><label>Expiry Date</label><input class="inp" type="date" id="r-cat-expiry"></div>
+        <div class="fgd"><label>Margin %</label><input class="inp" type="number" id="r-cat-margin" placeholder="0" min="0" step="0.01"></div>
+        <div class="fgd"><label>Discount %</label><input class="inp" type="number" id="r-cat-discount" placeholder="0" min="0" max="100" step="0.01"></div>
+        <div class="fgd" style="grid-column:1/-1;"><label>Description</label><input class="inp" id="r-cat-desc" placeholder="Optional description"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn btn-dark btn-sm" onclick="createRCatalog()">Create Catalog</button>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('r-new-cat-form').style.display='none'">Cancel</button>
       </div>
     </div>`;
     if (!cats.length) {
-      html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No catalogs yet. Click "+ New Catalog" to create one, then add items from Browse Items.</div>';
+      html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No catalogs yet. Click "+ New Catalog" to create one.</div>';
     } else {
       cats.forEach(c => {
         const link = `${location.origin}/catalog/${c.ownerId}/${c.slug}`;
+        const itemCount = (c.itemIds||[]).length;
         html += `<div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
-            <div><div style="font-size:15px;font-weight:800;">${c.name}</div><div style="font-size:11px;color:#888;">Slug: ${c.slug}</div></div>
-            <a href="${link}" target="_blank" class="btn btn-outline btn-sm">View Public Catalog →</a>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+            <div>
+              <div style="font-size:15px;font-weight:800;">${c.name}</div>
+              <div style="font-size:11px;color:#888;margin-top:2px;">Slug: ${c.slug}${c.validFrom ? ' · From: '+c.validFrom : ''}${c.expiryDate ? ' · Until: '+c.expiryDate : ''}</div>
+              ${c.description ? `<div style="font-size:12px;color:#555;margin-top:4px;">${c.description}</div>` : ''}
+              <div style="display:flex;gap:12px;margin-top:6px;font-size:12px;">
+                ${c.marginPct !== undefined && c.marginPct !== 0 ? `<span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:12px;font-weight:700;">Margin: ${c.marginPct}%</span>` : ''}
+                ${c.discountPct !== undefined && c.discountPct !== 0 ? `<span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:12px;font-weight:700;">Discount: ${c.discountPct}%</span>` : ''}
+                <span style="background:#f5f5f5;color:#555;padding:2px 8px;border-radius:12px;">${itemCount} item${itemCount!==1?'s':''}</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-dark btn-sm" onclick="openRManageItems('${c.id}','${c.name.replace(/'/g,"\\'")}')">Manage Items</button>
+              <a href="${link}" target="_blank" class="btn btn-outline btn-sm">View →</a>
+            </div>
           </div>
           <div class="link-box">
             <span class="link-url">${link}</span>
@@ -2256,12 +2277,123 @@ function showCreateRCatalog() {
 }
 
 function createRCatalog() {
-  const name = val('r-new-cat');
+  const name = val('r-cat-name');
   if (!name) return toast('Enter a catalog name', true);
-  api('POST', '/api/catalogs', { name }).then(() => {
+  const payload = {
+    name,
+    ...(val('r-cat-code') && { slug: val('r-cat-code') }),
+    ...(val('r-cat-from') && { validFrom: val('r-cat-from') }),
+    ...(val('r-cat-expiry') && { expiryDate: val('r-cat-expiry') }),
+    ...(val('r-cat-desc') && { description: val('r-cat-desc') }),
+    marginPct: parseFloat(val('r-cat-margin')) || 0,
+    discountPct: parseFloat(val('r-cat-discount')) || 0,
+  };
+  api('POST', '/api/catalogs', payload).then(() => {
     toast('Catalog created!');
     __loadedTabs['r-catalogs'] = false; loadTab('r-catalogs');
     __loadedTabs['r-browse'] = false; loadTab('r-browse');
+  }).catch(e => toast(e.message, true));
+}
+
+function openRManageItems(catId, catName) {
+  // Build a modal-like overlay panel
+  const overlay = document.createElement('div');
+  overlay.id = 'r-manage-items-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding-top:40px;overflow-y:auto;';
+  overlay.innerHTML = `<div style="background:#fff;border-radius:12px;width:min(900px,96vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="padding:18px 20px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div>
+        <div style="font-size:16px;font-weight:800;">Manage Items — ${catName}</div>
+        <div style="font-size:12px;color:#888;margin-top:2px;">Select items from the wholesaler's catalog to add</div>
+      </div>
+      <button onclick="document.getElementById('r-manage-items-overlay').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;">✕</button>
+    </div>
+    <div style="padding:12px 20px;border-bottom:1px solid #eee;flex-shrink:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <input class="inp" id="rmi-search" placeholder="Search items..." style="flex:1;min-width:180px;" oninput="filterRMIItems()">
+      <span id="rmi-count" style="font-size:12px;color:#888;white-space:nowrap;"></span>
+      <button class="btn btn-dark btn-sm" onclick="addSelectedRMIItems('${catId}')">Add Selected</button>
+    </div>
+    <div id="rmi-body" style="overflow-y:auto;flex:1;padding:16px;">
+      <div style="color:#888;font-size:13px;">Loading...</div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #eee;flex-shrink:0;display:flex;gap:10px;align-items:center;">
+      <label style="font-size:12px;cursor:pointer;"><input type="checkbox" id="rmi-chk-all" onchange="toggleAllRMI(this.checked)" style="margin-right:6px;">Select all visible</label>
+      <span style="flex:1;"></span>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('r-manage-items-overlay').remove()">Close</button>
+      <button class="btn btn-dark btn-sm" onclick="addSelectedRMIItems('${catId}')">Add Selected</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  // Load items and current catalog items together
+  Promise.all([
+    api('GET', '/api/reseller/wholesaler-items'),
+    api('GET', `/api/reseller/catalogs/${catId}/items`).catch(() => ({ items: [] })),
+  ]).then(([{ items: allItems, schema }, { items: catItems }]) => {
+    window.__rmiAllItems = allItems.filter(p => p.active !== false);
+    window.__rmiCatItemIds = new Set((catItems||[]).map(p => p.id));
+    window.__rmiSchema = schema || {};
+    renderRMIItems();
+  }).catch(e => {
+    document.getElementById('rmi-body').innerHTML = `<div style="color:#c0392b;">${e.message}</div>`;
+  });
+}
+
+function renderRMIItems() {
+  const query = (document.getElementById('rmi-search')?.value || '').toLowerCase();
+  const items = (window.__rmiAllItems || []).filter(p =>
+    !query || (p.itemNo||'').toLowerCase().includes(query) || (p.productName||'').toLowerCase().includes(query)
+  );
+  const inCat = window.__rmiCatItemIds || new Set();
+  const body = document.getElementById('rmi-body');
+  const countEl = document.getElementById('rmi-count');
+  if (!body) return;
+  if (!items.length) { body.innerHTML = '<div style="color:#888;text-align:center;padding:40px;">No items found</div>'; return; }
+  if (countEl) countEl.textContent = `${items.length} item${items.length!==1?'s':''}`;
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#f5f5f5;">';
+  html += '<th style="padding:8px;text-align:left;width:32px;"></th>';
+  html += '<th style="padding:8px;text-align:left;">Image</th>';
+  html += '<th style="padding:8px;text-align:left;">Item Code</th>';
+  html += '<th style="padding:8px;text-align:left;">Name</th>';
+  html += '<th style="padding:8px;text-align:right;">WSP</th>';
+  html += '<th style="padding:8px;text-align:center;">In Catalog</th>';
+  html += '</tr></thead><tbody>';
+  items.forEach(p => {
+    const isIn = inCat.has(p.id);
+    const imgHtml = p.imageUrl ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;">` : '<div style="width:36px;height:36px;background:#f0f0f0;border-radius:4px;"></div>';
+    html += `<tr style="border-bottom:1px solid #f0f0f0;${isIn?'background:#f0fff4;':''}">
+      <td style="padding:6px 8px;"><input type="checkbox" class="rmi-chk" data-id="${p.id}" ${isIn?'checked disabled':''}></td>
+      <td style="padding:6px 8px;">${imgHtml}</td>
+      <td style="padding:6px 8px;font-weight:600;">${p.itemNo||'-'}</td>
+      <td style="padding:6px 8px;">${p.productName||'-'}</td>
+      <td style="padding:6px 8px;text-align:right;">${p.salePrice!==undefined && p.salePrice!=='' ? '₹'+Number(p.salePrice).toFixed(2) : '-'}</td>
+      <td style="padding:6px 8px;text-align:center;">${isIn ? '<span style="color:#27ae60;font-weight:700;">✓ Added</span>' : ''}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+function filterRMIItems() { renderRMIItems(); }
+
+function toggleAllRMI(checked) {
+  document.querySelectorAll('.rmi-chk:not(:disabled)').forEach(c => { c.checked = checked; });
+}
+
+function addSelectedRMIItems(catId) {
+  const checked = Array.from(document.querySelectorAll('.rmi-chk:checked:not(:disabled)'));
+  if (!checked.length) return toast('Select at least one item', true);
+  const itemIds = checked.map(c => c.dataset.id);
+  api('POST', `/api/reseller/catalogs/${catId}/items`, { itemIds }).then(d => {
+    toast(`${itemIds.length} item(s) added to catalog`);
+    // Mark them as in-catalog
+    itemIds.forEach(id => {
+      window.__rmiCatItemIds = window.__rmiCatItemIds || new Set();
+      window.__rmiCatItemIds.add(id);
+    });
+    renderRMIItems();
+    // Refresh catalog list in background
+    __loadedTabs['r-catalogs'] = false;
   }).catch(e => toast(e.message, true));
 }
 

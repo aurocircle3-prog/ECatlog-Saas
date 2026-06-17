@@ -587,14 +587,6 @@ function loadWCatalogs() {
         <button class="btn btn-dark btn-sm" onclick="createCatalog()">Create</button>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('new-cat-form').style.display='none'">Cancel</button>
       </div>
-    </div>
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-title">Reseller Signup Link</div>
-      <div class="link-box">
-        <span class="link-url">${location.origin}/w/${slug}/signup</span>
-        <button class="btn btn-outline btn-sm" onclick="copyLink('/w/${slug}/signup')">Copy</button>
-      </div>
-      <div style="font-size:11px;color:#888;">Share this with resellers to let them sign up under your account.</div>
     </div>`;
     if (!cats.length) {
       html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No catalogs yet. Click "+ New Catalog" to create one.</div>';
@@ -921,7 +913,6 @@ function showImAddItem() {
     const f = schema[`field${i}`];
     if (f && f.enabled && f.name) customFields.push({ key: `field${i}`, ...f });
   }
-  const catOptions = (window.__wCatalogs||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('') || '<option value="">No catalogs yet</option>';
   let customHtml = '';
   if (customFields.length) {
     const pairs = [];
@@ -941,17 +932,14 @@ function showImAddItem() {
     </div>
     <div id="im-add-msg"></div>
     <div class="frow">
-      <div class="fgd"><label>Catalog *</label><select class="inp inp-full" id="im-add-catId">${catOptions}</select></div>
       <div class="fgd"><label>Item Code *</label><input class="inp inp-full" id="im-add-itemNo" placeholder="SKU001"></div>
-    </div>
-    <div class="frow">
       <div class="fgd"><label>Item Name</label><input class="inp inp-full" id="im-add-productName" placeholder="Product name"></div>
-      <div class="fgd"><label>Category</label><input class="inp inp-full" id="im-add-category" placeholder="Category"></div>
     </div>
     <div class="frow">
+      <div class="fgd"><label>Category</label><input class="inp inp-full" id="im-add-category" placeholder="Category"></div>
       <div class="fgd"><label>Selling Price</label><input class="inp inp-full" id="im-add-salePrice" type="number" placeholder="0.00"></div>
-      <div class="fgd"><label>Image</label><input type="file" class="inp inp-full" id="im-add-image" accept="image/*"></div>
     </div>
+    <div class="fgd"><label>Image</label><input type="file" class="inp inp-full" id="im-add-image" accept="image/*"></div>
     ${customHtml}
     <div style="margin-top:14px;"><button class="btn btn-dark btn-sm" onclick="btnAction(this,submitAddItem)">Add Item</button></div>
   </div>`;
@@ -962,9 +950,7 @@ function hideImPanel() { const p = document.getElementById('im-panel'); if (p) p
 function submitAddItem() {
   const msgEl = document.getElementById('im-add-msg');
   msgEl.innerHTML = '';
-  const catId = document.getElementById('im-add-catId')?.value;
   const itemNo = document.getElementById('im-add-itemNo')?.value?.trim();
-  if (!catId) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Select a catalog.</div>'; return Promise.resolve(); }
   if (!itemNo) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code is required.</div>'; return Promise.resolve(); }
   const schema = __itemMasterSchema;
   const body = {
@@ -976,7 +962,7 @@ function submitAddItem() {
     const f = schema[`field${i}`];
     if (f && f.enabled && f.name) { const v = document.getElementById(`im-add-field${i}`)?.value; if (v) body[`field${i}`] = v; }
   }
-  api('POST', `/api/catalogs/${catId}/products`, body).then(p => {
+  return api('POST', '/api/wholesaler/items', body).then(p => {
     const imgFile = document.getElementById('im-add-image')?.files?.[0];
     if (imgFile) {
       const fd = new FormData(); fd.append('image', imgFile);
@@ -1117,34 +1103,30 @@ function downloadItemsCsv() {
 function showImCsvImport() {
   const panel = document.getElementById('im-panel');
   if (!panel) return;
-  const catOptions = (window.__wCatalogs||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('') || '<option value="">No catalogs yet</option>';
   panel.innerHTML = `<div class="card" style="border:2px solid #2e3192;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <div class="card-title" style="margin:0;">Import Items from CSV</div>
       <button class="btn btn-outline btn-sm" onclick="hideImPanel()">✕ Close</button>
     </div>
-    <div class="fgd"><label>Target Catalog *</label><select class="inp inp-full" id="im-csv-cat">${catOptions}</select></div>
     <div style="background:#f0f4ff;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#2e3192;">
-      <b>Columns:</b> Item Code (required) · Item Name · Image Name · Category · and any enabled custom fields<br>
+      <b>Columns:</b> Item Code (required) · Item Name · Category · Selling Price · and any enabled custom fields<br>
       <b>Tip:</b> Download template from Field Settings tab.
     </div>
     <div style="border:2px dashed #e8e8e8;border-radius:8px;padding:20px;text-align:center;margin-bottom:12px;">
       <input type="file" id="im-csv-file" accept=".csv,.xlsx,.xls" style="width:100%;">
     </div>
-    <button class="btn btn-dark btn-sm" onclick="submitImCsvImport()">Import</button>
+    <button class="btn btn-dark btn-sm" onclick="btnAction(this,submitImCsvImport)">Import</button>
     <div id="im-csv-result" style="margin-top:10px;"></div>
   </div>`;
 }
 
 function submitImCsvImport() {
-  const catId = document.getElementById('im-csv-cat')?.value;
   const f = document.getElementById('im-csv-file');
-  if (!catId) return toast('Select a catalog', true);
-  if (!f || !f.files[0]) return toast('Select a file first', true);
+  if (!f || !f.files[0]) { toast('Select a file first', true); return Promise.resolve(); }
   const fd = new FormData(); fd.append('csv', f.files[0]);
   const resEl = document.getElementById('im-csv-result');
   resEl.innerHTML = '<div style="font-size:12px;color:#888;">Uploading...</div>';
-  api('POST', `/api/catalogs/${catId}/upload-csv`, fd, true).then(d => {
+  return api('POST', '/api/wholesaler/items/import-csv', fd, true).then(d => {
     resEl.innerHTML = `<div style="background:#e8f5ec;border-radius:8px;padding:12px;font-size:12px;color:#16a34a;">
       <b>✓ ${d.message}</b>
       ${d.errorCount>0?`<div style="color:#946c00;margin-top:4px;">${d.errorCount} rows skipped: ${d.errors.slice(0,3).map(e=>`Row ${e.row}: ${e.errors.join(', ')}`).join(' · ')}</div>`:''}
@@ -1270,15 +1252,14 @@ function saveFieldSettings() {
   }
 
   // Check for renames that would relabel existing product data
-  const doSave = () => {
-    api('PUT', '/api/wholesaler/field-schema', { schema: newSchema }).then(() => {
+  const doSave = () => api('PUT', '/api/wholesaler/field-schema', { schema: newSchema })
+    .then(() => {
       window.__fieldSchema = newSchema;
       __itemMasterSchema = newSchema;
       const msg = document.getElementById('fs-save-msg');
       if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
       toast('Field settings saved!');
-    }).catch(e => toast(e.message, true));
-  };
+    });
 
   const oldSchema = window.__fieldSchema || {};
   const renames = [];
@@ -1286,21 +1267,16 @@ function saveFieldSettings() {
     const k = `field${i}`, o = oldSchema[k], n = newSchema[k];
     if (o && n && o.name && n.name && o.name !== n.name) renames.push({ i, k, oldName: o.name, newName: n.name });
   }
-  if (!renames.length) { doSave(); return; }
+  if (!renames.length) return doSave();
 
-  // Fetch items to count affected products
-  api('GET', '/api/wholesaler/all-items').then(items => {
+  return api('GET', '/api/wholesaler/all-items').then(items => {
     const warnings = renames.map(r => {
       const count = items.filter(p => p[r.k] !== undefined && String(p[r.k]).trim() !== '').length;
-      return count > 0 ? `• Field ${r.i}: "${r.oldName}" → "${r.newName}" — ${count} item(s) have data that will be relabeled` : null;
+      return count > 0 ? `• Field ${r.i}: "${r.oldName}" → "${r.newName}" — ${count} item(s) will be relabeled` : null;
     }).filter(Boolean);
-
-    if (warnings.length) {
-      const proceed = confirm(`⚠️ Renaming warning:\n\n${warnings.join('\n')}\n\nThe data stays intact but will appear under the new field name.\nContinue?`);
-      if (!proceed) return;
-    }
-    doSave();
-  }).catch(() => doSave()); // if fetch fails, save anyway
+    if (warnings.length && !confirm(`⚠️ Renaming warning:\n\n${warnings.join('\n')}\n\nData stays intact but shows under new name.\nContinue?`)) return;
+    return doSave();
+  }).catch(() => doSave());
 }
 
 function downloadCsvTemplate() {
@@ -1615,9 +1591,11 @@ function loadAdminWholesalers() {
 
 function deleteWholesaler(id, firmName) {
   if (!confirm(`⚠️ Delete wholesaler "${firmName}"?\n\nThis will permanently delete:\n• All their catalogs and products\n• All their reseller accounts\n• All B2B orders\n\nThis cannot be undone.`)) return;
+  const btn = event.target;
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
   api('DELETE', `/api/admin/wholesalers/${id}`)
-    .then(d => { toast(d.message || 'Wholesaler deleted'); __loadedTabs['a-wholesalers'] = false; loadTab('a-wholesalers'); })
-    .catch(e => toast(e.message, true));
+    .then(d => { toast(d.message || 'Wholesaler deleted'); loadAdminWholesalers(); })
+    .catch(e => { toast(e.message, true); if (btn) { btn.disabled = false; btn.textContent = 'Delete'; } });
 }
 
 function loadAdminResellers() {

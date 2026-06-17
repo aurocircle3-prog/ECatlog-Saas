@@ -323,13 +323,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="toast" id="toast"></div>
 
 <script>
+<script>
 const API = '';
 let TOKEN = localStorage.getItem('wrs_token') || '';
 let USER = JSON.parse(localStorage.getItem('wrs_user') || 'null');
-let __cart = [];
-let __pubProducts = [];
-let __pubCatalogId = '';
+let __cart = [], __pubProducts = [], __pubCatalogId = '';
+let __activeTabs = [], __loadedTabs = {};
 
+// ── CORE ──────────────────────────────────────────────────────────────────
 function api(method, url, body, isForm) {
   const headers = {};
   if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
@@ -345,7 +346,7 @@ function api(method, url, body, isForm) {
   });
 }
 
-function val(id) { return (document.getElementById(id)||{}).value || ''; }
+function val(id) { return (document.getElementById(id) || {}).value || ''; }
 
 function toast(msg, isErr) {
   const t = document.getElementById('toast');
@@ -356,11 +357,9 @@ function toast(msg, isErr) {
 }
 
 function logout() {
-  localStorage.removeItem('wrs_token');
-  localStorage.removeItem('wrs_user');
+  localStorage.removeItem('wrs_token'); localStorage.removeItem('wrs_user');
   TOKEN = ''; USER = null;
-  history.pushState({}, '', '/');
-  render();
+  history.pushState({}, '', '/'); render();
 }
 
 function pathInfo() {
@@ -384,9 +383,51 @@ function render() {
   showPage('page-dash');
   document.getElementById('nav-user-name').textContent = USER.firmName || USER.userId;
   document.getElementById('nav-role-badge').textContent = USER.role.toUpperCase();
+  __loadedTabs = {};
   if (USER.role === 'wholesaler') renderWholesalerDash();
   else if (USER.role === 'reseller') renderResellerDash();
   else if (USER.role === 'admin') renderAdminDash();
+}
+
+// ── SIDEBAR ───────────────────────────────────────────────────────────────
+function renderSidebar(tabs, defaultTab) {
+  __activeTabs = tabs;
+  __loadedTabs = {};
+  const sb = document.getElementById('sidebar');
+  sb.innerHTML = tabs.map(t =>
+    `<div class="sitem${t.id === defaultTab ? ' on' : ''}" id="sitem-${t.id}" onclick="switchTab('${t.id}')">
+      <span class="sitem-icon">${t.icon}</span>${t.label}
+    </div>`
+  ).join('');
+  const db = document.getElementById('dash-body');
+  db.innerHTML = tabs.map(t =>
+    `<div class="tab-panel${t.id === defaultTab ? ' on' : ''}" id="panel-${t.id}"></div>`
+  ).join('');
+  loadTab(defaultTab);
+}
+
+function switchTab(id) {
+  __activeTabs.forEach(t => {
+    const p = document.getElementById('panel-' + t.id);
+    const s = document.getElementById('sitem-' + t.id);
+    if (p) p.className = 'tab-panel' + (t.id === id ? ' on' : '');
+    if (s) s.className = 'sitem' + (t.id === id ? ' on' : '');
+  });
+  loadTab(id);
+}
+
+function loadTab(id) {
+  if (__loadedTabs[id]) return;
+  __loadedTabs[id] = true;
+  if (id === 'w-catalogs') loadWCatalogs();
+  else if (id === 'w-fields') loadFieldSettings();
+  else if (id === 'w-resellers') loadWResellers();
+  else if (id === 'w-orders') loadWOrders();
+  else if (id === 'r-browse') loadRItems();
+  else if (id === 'r-catalogs') loadRCatalogs();
+  else if (id === 'r-orders') loadROrders();
+  else if (id === 'a-wholesalers') loadAdminWholesalers();
+  else if (id === 'a-resellers') loadAdminResellers();
 }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────
@@ -405,7 +446,7 @@ function renderLogin() {
       <div class="fg"><label>User ID</label><input id="li-userId" placeholder="Enter your user ID"></div>
       <div class="fg"><label>Password</label><input id="li-password" type="password" placeholder="Enter your password"></div>
       <button class="btn btn-dark" onclick="doLogin()">Sign In</button>
-      <div class="auth-alt">Admin login: <b>admin</b> / <b>admin123</b></div>
+      <div class="auth-alt" style="margin-top:10px;">Admin login: <b>admin</b> / <b>admin123</b></div>
     </div>
     <div id="auth-tab-register" style="display:none">
       <div class="auth-h">Register as Wholesaler</div>
@@ -416,8 +457,8 @@ function renderLogin() {
       </div>
       <div class="fg"><label>Firm / Company Name *</label><input id="rw-firmName" placeholder="Your business name"></div>
       <div class="frow">
-        <div class="fg"><label>Contact Person</label><input id="rw-contactPerson" placeholder="Name"></div>
-        <div class="fg"><label>Email</label><input id="rw-email" type="email" placeholder="Email address"></div>
+        <div class="fg"><label>Contact Person *</label><input id="rw-contactPerson" placeholder="Name"></div>
+        <div class="fg"><label>Email *</label><input id="rw-email" type="email" placeholder="Email address"></div>
       </div>
       <button class="btn btn-dark" onclick="doRegisterWholesaler()">Create Account</button>
     </div>
@@ -475,11 +516,11 @@ function renderResellerSignup(slug) {
     </div>
     <div class="fg"><label>Firm / Business Name *</label><input id="rs-firmName" placeholder="Your business name"></div>
     <div class="frow">
-      <div class="fg"><label>Contact Person</label><input id="rs-contactPerson" placeholder="Name"></div>
-      <div class="fg"><label>Email</label><input id="rs-email" type="email" placeholder="Email address"></div>
+      <div class="fg"><label>Contact Person *</label><input id="rs-contactPerson" placeholder="Name"></div>
+      <div class="fg"><label>Email *</label><input id="rs-email" type="email" placeholder="Email address"></div>
     </div>
     <button class="btn btn-dark" onclick="doRegisterReseller('${slug}')">Sign Up as Reseller</button>
-    <div class="auth-alt"><a onclick="history.pushState({},'','/');render()">← Back to Login</a></div>
+    <div class="auth-alt" style="margin-top:10px;"><a onclick="history.pushState({},'','/');render()">← Back to Login</a></div>
   </div>`;
 }
 
@@ -494,62 +535,38 @@ function doRegisterReseller(slug) {
     TOKEN = d.token; USER = d.user;
     localStorage.setItem('wrs_token', TOKEN);
     localStorage.setItem('wrs_user', JSON.stringify(USER));
-    history.pushState({}, '', '/');
-    render();
+    history.pushState({}, '', '/'); render();
   }).catch(e => { errEl.textContent = e.message; errEl.style.display = 'block'; });
 }
 
 // ── WHOLESALER DASHBOARD ──────────────────────────────────────────────────
 function renderWholesalerDash() {
-  const tabs = [
+  renderSidebar([
     { id: 'w-catalogs', icon: '📦', label: 'Catalogs' },
-    { id: 'w-fields', icon: '⚙️', label: 'Field Settings' },
-    { id: 'w-resellers', icon: '👥', label: 'Resellers' },
-    { id: 'w-orders', icon: '📋', label: 'B2B Orders' },
-  ];
-  renderSidebar(tabs, 'w-catalogs');
+    { id: 'w-fields',   icon: '⚙️', label: 'Field Settings' },
+    { id: 'w-resellers',icon: '👥', label: 'Resellers' },
+    { id: 'w-orders',   icon: '📋', label: 'B2B Orders' },
+  ], 'w-catalogs');
 }
 
-function renderSidebar(tabs, defaultTab) {
-  const sb = document.getElementById('sidebar');
-  sb.innerHTML = tabs.map(t => `
-    <div class="sitem${t.id === defaultTab ? ' on' : ''}" id="sitem-${t.id}" onclick="switchTab('${t.id}',${JSON.stringify(tabs.map(x=>x.id))})">
-      <span class="sitem-icon">${t.icon}</span>${t.label}
-    </div>`).join('');
-  const db = document.getElementById('dash-body');
-  db.innerHTML = tabs.map(t => `<div class="tab-panel${t.id === defaultTab ? ' on' : ''}" id="panel-${t.id}"></div>`).join('');
-  tabs.forEach(t => {
-    if (t.id === 'w-catalogs') loadWCatalogs();
-    if (t.id === 'w-fields') loadFieldSettings();
-    if (t.id === 'w-resellers') loadWResellers();
-    if (t.id === 'w-orders') loadWOrders();
-    if (t.id === 'r-browse') loadRItems();
-    if (t.id === 'r-catalogs') loadRCatalogs();
-    if (t.id === 'r-orders') loadROrders();
-    if (t.id === 'a-wholesalers') loadAdminWholesalers();
-    if (t.id === 'a-resellers') loadAdminResellers();
-  });
-}
-
-function switchTab(id, all) {
-  all.forEach(tid => {
-    const p = document.getElementById('panel-' + tid);
-    const s = document.getElementById('sitem-' + tid);
-    if (p) p.className = 'tab-panel' + (tid === id ? ' on' : '');
-    if (s) s.className = 'sitem' + (tid === id ? ' on' : '');
-  });
-}
-
+// ── WHOLESALER: CATALOGS LIST ─────────────────────────────────────────────
 function loadWCatalogs() {
   const el = document.getElementById('panel-w-catalogs');
   if (!el) return;
-  // Pre-load schema so product tables can show custom column headers
-  api('GET', '/api/wholesaler/field-schema').then(s => { window.__fieldSchema = s; }).catch(()=>{});
+  const slug = USER.slug || USER.userId;
   api('GET', '/api/catalogs').then(cats => {
-    const slug = USER.slug || USER.userId;
     let html = `
     <div class="sec-hdr">
-      <div><div class="sec-title">My Catalogs</div><div class="sec-sub">Manage your product catalogs</div></div>
+      <div><div class="sec-title">My Catalogs</div><div class="sec-sub">Click a catalog to manage its items</div></div>
+      <button class="btn btn-dark btn-sm" onclick="showCreateCatalog()">+ New Catalog</button>
+    </div>
+    <div class="card" id="new-cat-form" style="display:none;margin-bottom:16px;">
+      <div class="card-title">Create New Catalog</div>
+      <div style="display:flex;gap:10px;">
+        <input class="inp" id="new-cat-name" placeholder="Catalog name" style="flex:1;">
+        <button class="btn btn-dark btn-sm" onclick="createCatalog()">Create</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('new-cat-form').style.display='none'">Cancel</button>
+      </div>
     </div>
     <div class="card" style="margin-bottom:16px;">
       <div class="card-title">Reseller Signup Link</div>
@@ -557,146 +574,236 @@ function loadWCatalogs() {
         <span class="link-url">${location.origin}/w/${slug}/signup</span>
         <button class="btn btn-outline btn-sm" onclick="copyLink('/w/${slug}/signup')">Copy</button>
       </div>
-      <div style="font-size:11px;color:#888;">Share this link with your resellers to let them sign up under your account.</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Create New Catalog</div>
-      <div style="display:flex;gap:10px;">
-        <input class="inp" id="new-cat-name" placeholder="Catalog name" style="flex:1;">
-        <button class="btn btn-dark btn-sm" onclick="createCatalog()">+ Create</button>
-      </div>
+      <div style="font-size:11px;color:#888;">Share this with resellers to let them sign up under your account.</div>
     </div>`;
-    cats.forEach(c => {
-      html += `
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <div><div style="font-size:15px;font-weight:800;">${c.name}</div><div style="font-size:11px;color:#888;">Slug: ${c.slug}</div></div>
-        </div>
-        <div class="tbl-wrap" style="margin-bottom:14px;"><div id="prods-${c.id}"><div style="padding:20px;text-align:center;color:#bbb;font-size:13px;">Loading...</div></div></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-          <div>
-            <div class="card-title">Add Item Manually</div>
-            <div class="frow">
-              <div class="fgd"><label>Item No *</label><input class="inp inp-full" id="p-itemNo-${c.id}" placeholder="e.g. SKU001"></div>
-              <div class="fgd"><label>Product Name</label><input class="inp inp-full" id="p-name-${c.id}" placeholder="Name"></div>
+    if (!cats.length) {
+      html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No catalogs yet. Click "+ New Catalog" to create one.</div>';
+    } else {
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">';
+      cats.forEach(c => {
+        html += `
+        <div class="card" style="cursor:pointer;margin-bottom:0;" onclick="openCatalog('${c.id}','${c.name.replace(/'/g,"\\'")}','${c.slug}')">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#111;">${c.name}</div>
+              <div style="font-size:11px;color:#888;margin-top:2px;">Slug: ${c.slug}</div>
             </div>
-            <div class="frow">
-              <div class="fgd"><label>Sale Price *</label><input class="inp inp-full" id="p-price-${c.id}" placeholder="0.00"></div>
-              <div class="fgd"><label>Category</label><input class="inp inp-full" id="p-cat-${c.id}" placeholder="Category"></div>
-            </div>
-            <div class="frow">
-              <div class="fgd"><label>Min Qty</label><input class="inp inp-full" id="p-minqty-${c.id}" placeholder="1"></div>
-              <div class="fgd"><label>Unit</label><input class="inp inp-full" id="p-unit-${c.id}" placeholder="pcs"></div>
-            </div>
-            <button class="btn btn-dark btn-sm" onclick="addProduct('${c.id}')">Add Item</button>
+            <span style="font-size:11px;background:#f0f4ff;color:#2e3192;padding:3px 8px;border-radius:6px;font-weight:600;">Manage →</span>
           </div>
-          <div>
-            <div class="card-title">Upload CSV / XLSX</div>
-            <div style="background:#f9f9f9;border:2px dashed #e8e8e8;border-radius:8px;padding:16px;text-align:center;margin-bottom:10px;">
-              <div style="font-size:13px;color:#888;margin-bottom:8px;">Drag &amp; drop or click to select</div>
-              <input type="file" id="csv-${c.id}" accept=".csv,.xlsx,.xls" style="width:100%;">
-            </div>
-            <button class="btn btn-dark btn-sm" onclick="uploadCsv('${c.id}')">Upload File</button>
-            <div id="csv-msg-${c.id}" style="margin-top:8px;"></div>
-          </div>
-        </div>
-      </div>`;
-    });
+        </div>`;
+      });
+      html += '</div>';
+    }
     el.innerHTML = html;
-    cats.forEach(c => loadProducts(c.id));
   });
+}
+
+function showCreateCatalog() {
+  const f = document.getElementById('new-cat-form');
+  if (f) f.style.display = f.style.display === 'none' ? '' : 'none';
+}
+
+function createCatalog() {
+  const name = val('new-cat-name');
+  if (!name) return toast('Enter a catalog name', true);
+  api('POST', '/api/catalogs', { name }).then(() => {
+    toast('Catalog created!');
+    __loadedTabs['w-catalogs'] = false;
+    loadTab('w-catalogs');
+  }).catch(e => toast(e.message, true));
 }
 
 function copyLink(path) {
   navigator.clipboard.writeText(location.origin + path).then(() => toast('Link copied!'));
 }
 
-function createCatalog() {
-  const name = val('new-cat-name');
-  if (!name) return toast('Enter a catalog name', true);
-  api('POST', '/api/catalogs', { name }).then(() => { toast('Catalog created!'); loadWCatalogs(); });
+// ── WHOLESALER: CATALOG DETAIL (inside a catalog) ─────────────────────────
+function openCatalog(catId, catName, catSlug) {
+  const el = document.getElementById('panel-w-catalogs');
+  if (!el) return;
+  // Pre-load schema for column headers
+  api('GET', '/api/wholesaler/field-schema').then(s => { window.__fieldSchema = s; }).catch(() => {});
+
+  el.innerHTML = `
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+    <button class="btn btn-outline btn-sm" onclick="backToCatalogs()">← Back</button>
+    <div>
+      <div style="font-size:18px;font-weight:800;">${catName}</div>
+      <div style="font-size:11px;color:#888;">Slug: ${catSlug}</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:20px;" id="cat-subtabs">
+    <button class="btn btn-dark btn-sm" id="cst-items" onclick="showCatTab('items','${catId}')">Items List</button>
+    <button class="btn btn-outline btn-sm" id="cst-manual" onclick="showCatTab('manual','${catId}')">Manual Entry</button>
+    <button class="btn btn-outline btn-sm" id="cst-csv" onclick="showCatTab('csv','${catId}')">CSV / XLSX Import</button>
+  </div>
+  <div id="cat-tab-content"></div>`;
+
+  showCatTab('items', catId);
 }
 
-function loadProducts(catId) {
+function backToCatalogs() {
+  __loadedTabs['w-catalogs'] = false;
+  loadTab('w-catalogs');
+}
+
+function showCatTab(tab, catId) {
+  ['items','manual','csv'].forEach(t => {
+    const btn = document.getElementById('cst-' + t);
+    if (btn) btn.className = 'btn btn-sm ' + (t === tab ? 'btn-dark' : 'btn-outline');
+  });
+  const el = document.getElementById('cat-tab-content');
+  if (!el) return;
+  if (tab === 'items') renderCatItems(catId, el);
+  else if (tab === 'manual') renderManualEntry(catId, el);
+  else if (tab === 'csv') renderCsvImport(catId, el);
+}
+
+function renderCatItems(catId, el) {
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading items...</div>';
   api('GET', `/api/catalogs/${catId}/products`).then(prods => {
-    const el = document.getElementById('prods-' + catId);
-    if (!el) return;
-    if (!prods.length) { el.innerHTML = '<div style="padding:14px;color:#bbb;font-size:13px;">No items yet. Add manually or upload CSV.</div>'; return; }
     const schema = window.__fieldSchema || {};
     const customCols = [];
     for (let i = 1; i <= 13; i++) {
       const f = schema[`field${i}`];
       if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, name: f.name });
     }
-    let html = `<table class="tbl"><thead><tr><th>Item No</th><th>Name</th><th>Selling Price</th><th>Category</th><th>Min Qty</th><th>Unit</th>${customCols.map(c=>`<th>${c.name}</th>`).join('')}</tr></thead><tbody>`;
+    if (!prods.length) { el.innerHTML = '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No items yet. Use Manual Entry or CSV Import to add products.</div>'; return; }
+    let html = `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+      <th>Item Code</th><th>Name</th><th>Selling Price</th><th>Category</th><th>Min Qty</th><th>Unit</th>
+      ${customCols.map(c => `<th>${c.name}</th>`).join('')}
+    </tr></thead><tbody>`;
     prods.forEach(p => {
       html += `<tr><td><b>${p.itemNo}</b></td><td>${p.productName||'-'}</td><td>₹${p.salePrice}</td><td>${p.category||'-'}</td><td>${p.minQty||1}</td><td>${p.unit||'-'}</td>`;
       customCols.forEach(c => { html += `<td>${p[c.key]||'-'}</td>`; });
       html += '</tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     el.innerHTML = html;
   });
 }
 
-function addProduct(catId) {
-  api('POST', `/api/catalogs/${catId}/products`, {
-    itemNo: val('p-itemNo-' + catId), productName: val('p-name-' + catId),
-    salePrice: val('p-price-' + catId), category: val('p-cat-' + catId),
-    minQty: val('p-minqty-' + catId), unit: val('p-unit-' + catId)
-  }).then(() => { toast('Item added!'); loadProducts(catId); }).catch(e => toast(e.message, true));
+function renderManualEntry(catId, el) {
+  const schema = window.__fieldSchema || {};
+  const customFields = [];
+  for (let i = 1; i <= 13; i++) {
+    const f = schema[`field${i}`];
+    if (f && f.enabled && f.name) customFields.push({ key: `field${i}`, name: f.name, type: f.type, required: f.required });
+  }
+  let customHtml = '';
+  if (customFields.length) {
+    const pairs = [];
+    for (let i = 0; i < customFields.length; i += 2) {
+      const a = customFields[i], b = customFields[i+1];
+      pairs.push(`<div class="frow">
+        <div class="fgd"><label>${a.name}${a.required?' *':''}</label><input class="inp inp-full" id="mp-${a.key}" type="${a.type==='number'?'number':'text'}" placeholder="${a.name}"></div>
+        ${b ? `<div class="fgd"><label>${b.name}${b.required?' *':''}</label><input class="inp inp-full" id="mp-${b.key}" type="${b.type==='number'?'number':'text'}" placeholder="${b.name}"></div>` : '<div></div>'}
+      </div>`);
+    }
+    customHtml = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;"><div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">Custom Fields</div>${pairs.join('')}</div>`;
+  }
+  el.innerHTML = `
+  <div class="card">
+    <div class="card-title">Add Item Manually</div>
+    <div id="manual-msg"></div>
+    <div class="frow">
+      <div class="fgd"><label>Item Code *</label><input class="inp inp-full" id="mp-itemNo" placeholder="e.g. SKU001"></div>
+      <div class="fgd"><label>Item Name</label><input class="inp inp-full" id="mp-productName" placeholder="Product name"></div>
+    </div>
+    <div class="frow">
+      <div class="fgd"><label>Selling Price *</label><input class="inp inp-full" id="mp-salePrice" type="number" placeholder="0.00"></div>
+      <div class="fgd"><label>Category</label><input class="inp inp-full" id="mp-category" placeholder="Category"></div>
+    </div>
+    <div class="frow">
+      <div class="fgd"><label>Min Qty</label><input class="inp inp-full" id="mp-minQty" type="number" placeholder="1"></div>
+      <div class="fgd"><label>Unit</label><input class="inp inp-full" id="mp-unit" placeholder="Pcs"></div>
+    </div>
+    <div class="fgd"><label>Image Name</label><input class="inp inp-full" id="mp-imageName" placeholder="filename.jpg"></div>
+    ${customHtml}
+    <div style="margin-top:14px;">
+      <button class="btn btn-dark btn-sm" onclick="addProductManual('${catId}')">Add Item</button>
+    </div>
+  </div>`;
+}
+
+function addProductManual(catId) {
+  const msgEl = document.getElementById('manual-msg');
+  msgEl.innerHTML = '';
+  const schema = window.__fieldSchema || {};
+  const body = {
+    itemNo: val('mp-itemNo'), productName: val('mp-productName'),
+    salePrice: val('mp-salePrice'), category: val('mp-category'),
+    minQty: val('mp-minQty'), unit: val('mp-unit'), imageName: val('mp-imageName'),
+  };
+  for (let i = 1; i <= 13; i++) {
+    const f = schema[`field${i}`];
+    if (f && f.enabled && f.name) {
+      const v = val(`mp-field${i}`);
+      if (v) body[`field${i}`] = v;
+    }
+  }
+  if (!body.itemNo || !body.salePrice) {
+    msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code and Selling Price are required.</div>'; return;
+  }
+  api('POST', `/api/catalogs/${catId}/products`, body).then(() => {
+    toast('Item added!');
+    msgEl.innerHTML = '<div class="ok-msg" style="display:block;">✓ Item added successfully.</div>';
+    // clear fields
+    ['itemNo','productName','salePrice','category','minQty','unit','imageName'].forEach(k => {
+      const el2 = document.getElementById('mp-' + k); if (el2) el2.value = '';
+    });
+    for (let i = 1; i <= 13; i++) {
+      const el2 = document.getElementById('mp-field' + i); if (el2) el2.value = '';
+    }
+  }).catch(e => { msgEl.innerHTML = `<div class="err-msg" style="display:block;">${e.message}</div>`; });
+}
+
+function renderCsvImport(catId, el) {
+  el.innerHTML = `
+  <div class="card">
+    <div class="card-title">Upload CSV / XLSX</div>
+    <div style="background:#f0f4ff;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12px;color:#2e3192;line-height:1.8;">
+      <b>Required columns:</b> Item Code, Item Name, Selling Price<br>
+      <b>Optional columns:</b> Image Name, Category, Min Qty, Unit + any custom fields you've defined in Field Settings<br>
+      <b>Tip:</b> Go to Field Settings → Download Template to get a ready-made CSV header.
+    </div>
+    <div style="border:2px dashed #e8e8e8;border-radius:8px;padding:24px;text-align:center;margin-bottom:12px;">
+      <div style="font-size:13px;color:#888;margin-bottom:8px;">Select your CSV or XLSX file</div>
+      <input type="file" id="csv-file-${catId}" accept=".csv,.xlsx,.xls" style="width:100%;">
+    </div>
+    <button class="btn btn-dark btn-sm" onclick="uploadCsv('${catId}')">Upload &amp; Import</button>
+    <div id="csv-result-${catId}" style="margin-top:12px;"></div>
+  </div>`;
 }
 
 function uploadCsv(catId) {
-  const f = document.getElementById('csv-' + catId).files[0];
-  if (!f) return toast('Select a file first', true);
-  const fd = new FormData(); fd.append('csv', f);
-  const msgEl = document.getElementById('csv-msg-' + catId);
-  msgEl.innerHTML = '<span style="color:#888;font-size:12px;">Uploading...</span>';
+  const f = document.getElementById('csv-file-' + catId);
+  if (!f || !f.files[0]) return toast('Select a file first', true);
+  const fd = new FormData(); fd.append('csv', f.files[0]);
+  const resEl = document.getElementById('csv-result-' + catId);
+  resEl.innerHTML = '<div style="font-size:12px;color:#888;padding:8px 0;">Uploading...</div>';
   api('POST', `/api/catalogs/${catId}/upload-csv`, fd, true)
-    .then(d => { msgEl.innerHTML = `<span style="color:#16a34a;font-size:12px;">✓ ${d.message}</span>`; loadProducts(catId); })
-    .catch(e => { msgEl.innerHTML = `<span style="color:#c0392b;font-size:12px;">✗ ${e.message}</span>`; });
+    .then(d => {
+      resEl.innerHTML = `<div style="background:#e8f5ec;border-radius:8px;padding:12px;font-size:12px;color:#16a34a;">
+        <b>✓ ${d.message}</b>
+        ${d.errorCount > 0 ? `<div style="color:#946c00;margin-top:6px;"><b>${d.errorCount} rows skipped:</b> ${d.errors.slice(0,3).map(e=>`Row ${e.row}: ${e.errors.join(', ')}`).join(' · ')}</div>` : ''}
+      </div>`;
+    })
+    .catch(e => { resEl.innerHTML = `<div style="background:#fce8e8;border-radius:8px;padding:12px;font-size:12px;color:#c0392b;">✗ ${e.message}</div>`; });
 }
 
-function loadWResellers() {
-  const el = document.getElementById('panel-w-resellers');
-  if (!el) return;
-  api('GET', '/api/wholesaler/resellers').then(rs => {
-    const pending = rs.filter(r => r.status === 'pending').length;
-    let html = `
-    <div class="sec-hdr">
-      <div><div class="sec-title">Resellers</div><div class="sec-sub">${rs.length} total · ${pending} pending approval</div></div>
-    </div>`;
-    if (!rs.length) { html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No resellers yet. Share your signup link to get started.</div>'; }
-    else {
-      html += `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Firm</th><th>User ID</th><th>Contact</th><th>Email</th><th>Status</th><th>Actions</th></tr></thead><tbody>`;
-      rs.forEach(r => {
-        const statusBadge = r.status === 'approved' ? 'bg-green' : r.status === 'pending' ? 'bg-amber' : 'bg-red';
-        html += `<tr>
-          <td><b>${r.firmName}</b></td><td>${r.userId}</td>
-          <td>${r.contactPerson||'-'}</td><td>${r.email||'-'}</td>
-          <td><span class="badge ${statusBadge}">${r.status}</span></td>
-          <td>${r.status === 'pending' ? `<button class="btn-green-sm" onclick="approveReseller('${r.id}')">Approve</button> <button class="btn-danger-sm" onclick="rejectReseller('${r.id}')">Reject</button>` : '-'}</td>
-        </tr>`;
-      });
-      html += '</tbody></table></div>';
-    }
-    el.innerHTML = html;
-  });
-}
-
+// ── WHOLESALER: FIELD SETTINGS ────────────────────────────────────────────
 function loadFieldSettings() {
   const el = document.getElementById('panel-w-fields');
   if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
   api('GET', '/api/wholesaler/field-schema').then(schema => {
     window.__fieldSchema = schema;
     let rows = '';
     for (let i = 1; i <= 13; i++) {
-      const k = `field${i}`;
-      const f = schema[k] || { name: '', type: 'text', required: false, decimals: 0, enabled: i <= 10 };
-      const isLocked = false;
-      rows += `<tr style="background:${i > 10 ? '#fffbf0' : '#fff'}">
-        <td style="font-weight:700;color:#555;padding:8px 12px;">Field ${i}</td>
+      const f = schema[`field${i}`] || { name: '', type: 'text', required: false, decimals: 0, enabled: i <= 10 };
+      rows += `<tr style="${i > 10 ? 'background:#fffbf0;' : ''}">
+        <td style="font-weight:700;color:#555;padding:8px 12px;white-space:nowrap;">Field ${i}</td>
         <td style="padding:6px 8px;"><input class="inp" style="width:100%;min-width:120px;" id="fs-name-${i}" value="${f.name||''}" placeholder="e.g. Colour"></td>
         <td style="padding:6px 8px;text-align:center;">
           <select class="inp" id="fs-type-${i}" style="width:90px;">
@@ -711,12 +818,12 @@ function loadFieldSettings() {
     }
     el.innerHTML = `
     <div class="sec-hdr">
-      <div><div class="sec-title">Field Settings</div><div class="sec-sub">Define the columns in your product catalog. These map to CSV headers during upload.</div></div>
+      <div><div class="sec-title">Field Settings</div><div class="sec-sub">Define extra columns for your catalog. These become CSV headers.</div></div>
     </div>
     <div class="card">
-      <div style="margin-bottom:12px;padding:12px;background:#f0f4ff;border-radius:8px;font-size:12px;color:#2e3192;line-height:1.7;">
-        <b>Fixed fields (always present):</b> Item Code · Item Name · Image Name · Selling Price · Min Qty · Unit<br>
-        <b>Custom fields below</b> let you add extra columns like MRP, Colour, Size, Weight, etc. Enable a field, give it a name, and use that exact name as the column header in your CSV.
+      <div style="margin-bottom:12px;padding:10px 14px;background:#f0f4ff;border-radius:8px;font-size:12px;color:#2e3192;line-height:1.7;">
+        <b>Fixed fields (always present, cannot be changed):</b> Item Code · Item Name · Image Name · Selling Price · Min Qty · Unit<br>
+        <b>Custom fields below</b> — enable a field, give it a name (e.g. "MRP", "Colour", "Size"), and use that exact name as a column header in your CSV.
       </div>
       <div class="tbl-wrap">
         <table class="tbl" style="white-space:normal;">
@@ -724,45 +831,26 @@ function loadFieldSettings() {
             <th style="width:80px;">Field</th>
             <th>Field Name <span style="font-weight:400;color:#aaa;">(= CSV column header)</span></th>
             <th style="width:100px;">Type</th>
-            <th style="width:80px;">Mandatory?</th>
+            <th style="width:90px;">Mandatory?</th>
             <th style="width:80px;">Decimals</th>
             <th style="width:80px;">Enabled</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
-      <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
-        <button class="btn btn-dark btn-sm" onclick="saveFieldSettings()">Save Field Settings</button>
+      <div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-dark btn-sm" onclick="saveFieldSettings()">Save Settings</button>
+        <button class="btn btn-outline btn-sm" onclick="downloadCsvTemplate()">Download CSV Template</button>
         <span id="fs-save-msg" style="font-size:12px;color:#16a34a;display:none;">✓ Saved!</span>
       </div>
-    </div>
-    <div class="card" style="margin-top:0;">
-      <div class="card-title">Sample CSV Template</div>
-      <div style="font-size:12px;color:#666;margin-bottom:10px;">Based on your current field settings, your CSV should have these columns:</div>
-      <div id="fs-csv-preview" style="background:#f5f5f5;border-radius:6px;padding:10px 14px;font-family:monospace;font-size:12px;color:#333;overflow-x:auto;white-space:nowrap;"></div>
-      <button class="btn btn-outline btn-sm" style="margin-top:10px;" onclick="downloadCsvTemplate()">Download Template</button>
     </div>`;
-    renderCsvPreview(schema);
-  });
-}
-
-function renderCsvPreview(schema) {
-  const el = document.getElementById('fs-csv-preview');
-  if (!el) return;
-  const fixed = ['Item Code', 'Item Name', 'Image Name', 'Selling Price', 'Min Qty', 'Unit'];
-  const custom = [];
-  for (let i = 1; i <= 13; i++) {
-    const f = schema[`field${i}`];
-    if (f && f.enabled && f.name) custom.push(f.name);
-  }
-  el.textContent = [...fixed, ...custom].join(', ');
+  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
 }
 
 function saveFieldSettings() {
   const schema = {};
   for (let i = 1; i <= 13; i++) {
-    const k = `field${i}`;
-    schema[k] = {
+    schema[`field${i}`] = {
       name: (document.getElementById(`fs-name-${i}`)?.value || '').trim(),
       type: document.getElementById(`fs-type-${i}`)?.value || 'text',
       required: document.getElementById(`fs-req-${i}`)?.checked || false,
@@ -774,7 +862,6 @@ function saveFieldSettings() {
     window.__fieldSchema = schema;
     const msg = document.getElementById('fs-save-msg');
     if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
-    renderCsvPreview(schema);
     toast('Field settings saved!');
   }).catch(e => toast(e.message, true));
 }
@@ -788,77 +875,115 @@ function downloadCsvTemplate() {
     if (f && f.enabled && f.name) custom.push(f.name);
   }
   const headers = [...fixed, ...custom];
-  const csv = headers.join(',') + '\n' + headers.map(() => '').join(',');
+  const csv = headers.join(',') + '\n';
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'catalog-template.csv';
   a.click();
 }
 
-function approveReseller(id) { api('PUT', `/api/wholesaler/resellers/${id}/approve`).then(() => { toast('Reseller approved!'); loadWResellers(); }).catch(e => toast(e.message, true)); }
-function rejectReseller(id) { api('PUT', `/api/wholesaler/resellers/${id}/reject`).then(() => { toast('Reseller rejected'); loadWResellers(); }).catch(e => toast(e.message, true)); }
+// ── WHOLESALER: RESELLERS ─────────────────────────────────────────────────
+function loadWResellers() {
+  const el = document.getElementById('panel-w-resellers');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
+  api('GET', '/api/wholesaler/resellers').then(rs => {
+    const pending = rs.filter(r => r.status === 'pending').length;
+    let html = `<div class="sec-hdr"><div><div class="sec-title">Resellers</div><div class="sec-sub">${rs.length} total · ${pending} pending approval</div></div></div>`;
+    if (!rs.length) {
+      html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No resellers yet. Share your signup link from the Catalogs tab.</div>';
+    } else {
+      html += `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+        <th>Firm</th><th>User ID</th><th>Contact</th><th>Email</th><th>Status</th><th>Actions</th>
+      </tr></thead><tbody>`;
+      rs.forEach(r => {
+        const badge = r.status === 'approved' ? 'bg-green' : r.status === 'pending' ? 'bg-amber' : 'bg-red';
+        html += `<tr>
+          <td><b>${r.firmName}</b></td><td>${r.userId}</td>
+          <td>${r.contactPerson||'-'}</td><td>${r.email||'-'}</td>
+          <td><span class="badge ${badge}">${r.status}</span></td>
+          <td>${r.status === 'pending'
+            ? `<button class="btn-green-sm" onclick="approveReseller('${r.id}')">Approve</button> <button class="btn-danger-sm" onclick="rejectReseller('${r.id}')">Reject</button>`
+            : '-'}</td>
+        </tr>`;
+      });
+      html += '</tbody></table></div>';
+    }
+    el.innerHTML = html;
+  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
+}
 
+function approveReseller(id) {
+  api('PUT', `/api/wholesaler/resellers/${id}/approve`)
+    .then(() => { toast('Reseller approved!'); __loadedTabs['w-resellers'] = false; loadTab('w-resellers'); })
+    .catch(e => toast(e.message, true));
+}
+function rejectReseller(id) {
+  api('PUT', `/api/wholesaler/resellers/${id}/reject`)
+    .then(() => { toast('Reseller rejected'); __loadedTabs['w-resellers'] = false; loadTab('w-resellers'); })
+    .catch(e => toast(e.message, true));
+}
+
+// ── WHOLESALER: B2B ORDERS ────────────────────────────────────────────────
 function loadWOrders() {
   const el = document.getElementById('panel-w-orders');
   if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
   api('GET', '/api/wholesaler/wholesale-orders').then(os => {
     let html = `<div class="sec-hdr"><div><div class="sec-title">B2B Orders</div><div class="sec-sub">Orders forwarded by resellers at original wholesale prices</div></div></div>`;
-    if (!os.length) { html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No forwarded orders yet.</div>'; }
-    else {
-      html += `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Order No</th><th>Reseller</th><th>Date</th><th>Items</th><th>Total</th></tr></thead><tbody>`;
+    if (!os.length) {
+      html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No forwarded orders yet.</div>';
+    } else {
+      html += `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+        <th>Order No</th><th>Reseller</th><th>Date</th><th>Items</th><th>Total</th>
+      </tr></thead><tbody>`;
       os.forEach(o => html += `<tr>
         <td><b>${o.orderNo}</b></td><td>${o.resellerId}</td>
         <td>${o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '-'}</td>
-        <td style="max-width:200px;white-space:normal;">${(o.items||[]).map(i=>`${i.itemNo} ×${i.qty}`).join(', ')}</td>
+        <td style="max-width:200px;white-space:normal;">${(o.items||[]).map(i => `${i.itemNo} ×${i.qty}`).join(', ')}</td>
         <td><b>₹${o.total}</b></td>
       </tr>`);
       html += '</tbody></table></div>';
     }
     el.innerHTML = html;
-  });
+  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
 }
 
 // ── RESELLER DASHBOARD ────────────────────────────────────────────────────
 function renderResellerDash() {
   if (USER.status === 'pending') {
-    showPage('page-dash');
     document.getElementById('sidebar').innerHTML = '';
     document.getElementById('dash-body').innerHTML = `
-    <div class="gate-wrap">
-      <div class="gate-card">
-        <div class="gate-icon">⏳</div>
-        <div class="gate-title">Pending Approval</div>
-        <div class="gate-sub">Your account is waiting for wholesaler approval.<br>You'll be able to build your catalog once approved.</div>
-        <button class="btn btn-outline btn-sm" style="margin-top:20px;" onclick="logout()">Logout</button>
-      </div>
-    </div>`;
+    <div class="gate-wrap"><div class="gate-card">
+      <div class="gate-icon">⏳</div>
+      <div class="gate-title">Pending Approval</div>
+      <div class="gate-sub">Your account is waiting for wholesaler approval.<br>You'll be able to build your catalog once approved.</div>
+      <button class="btn btn-outline btn-sm" style="margin-top:20px;" onclick="logout()">Logout</button>
+    </div></div>`;
     return;
   }
   if (USER.status === 'rejected') {
-    showPage('page-dash');
     document.getElementById('sidebar').innerHTML = '';
     document.getElementById('dash-body').innerHTML = `
-    <div class="gate-wrap">
-      <div class="gate-card">
-        <div class="gate-icon">❌</div>
-        <div class="gate-title">Registration Rejected</div>
-        <div class="gate-sub">Your registration was rejected by the wholesaler.<br>Please contact them directly for assistance.</div>
-        <button class="btn btn-outline btn-sm" style="margin-top:20px;" onclick="logout()">Logout</button>
-      </div>
-    </div>`;
+    <div class="gate-wrap"><div class="gate-card">
+      <div class="gate-icon">❌</div>
+      <div class="gate-title">Registration Rejected</div>
+      <div class="gate-sub">Your registration was rejected by the wholesaler.</div>
+      <button class="btn btn-outline btn-sm" style="margin-top:20px;" onclick="logout()">Logout</button>
+    </div></div>`;
     return;
   }
-  const tabs = [
-    { id: 'r-browse', icon: '🔍', label: 'Browse Items' },
+  renderSidebar([
+    { id: 'r-browse',   icon: '🔍', label: 'Browse Items' },
     { id: 'r-catalogs', icon: '📖', label: 'My Catalogs' },
-    { id: 'r-orders', icon: '🛒', label: 'My Orders' },
-  ];
-  renderSidebar(tabs, 'r-browse');
+    { id: 'r-orders',   icon: '🛒', label: 'My Orders' },
+  ], 'r-browse');
 }
 
 function loadRItems() {
   const el = document.getElementById('panel-r-browse');
   if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
   api('GET', '/api/reseller/wholesaler-items').then(({ items, schema }) => {
     window.__wholesalerSchema = schema || {};
     const customCols = [];
@@ -869,30 +994,31 @@ function loadRItems() {
     let html = `
     <div class="sec-hdr"><div><div class="sec-title">Wholesaler Items</div><div class="sec-sub">Select items and add them to your catalog with your margin</div></div></div>
     <div class="card" style="margin-bottom:16px;">
-      <div class="card-title">Bulk Add to Catalog</div>
+      <div class="card-title">Bulk Add Selected Items to Catalog</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;">
         <div class="fgd"><label>Margin %</label><input class="inp inp-full" id="bulk-margin" placeholder="e.g. 30"></div>
-        <div class="fgd"><label>Discount % (shown to customer)</label><input class="inp inp-full" id="bulk-discount" placeholder="e.g. 10"></div>
+        <div class="fgd"><label>Discount % (displayed to customer)</label><input class="inp inp-full" id="bulk-discount" placeholder="e.g. 10"></div>
         <div class="fgd"><label>Target Catalog</label><select class="inp inp-full" id="bulk-catalog"></select></div>
-        <button class="btn btn-dark btn-sm" onclick="bulkAdd()" style="margin-bottom:0;">Add Selected</button>
+        <button class="btn btn-dark btn-sm" onclick="bulkAdd()">Add Selected</button>
       </div>
-      <div style="font-size:11px;color:#888;margin-top:8px;">
-        Formula: Final price = Wholesale × (1 + Margin%). Displayed MRP = Final ÷ (1 − Discount%) if discount &gt; 0.
+      <div style="font-size:11px;color:#888;margin-top:6px;">
+        Final price = Wholesale × (1 + Margin%). Displayed MRP = Final ÷ (1 − Discount%) if discount &gt; 0.
       </div>
     </div>`;
-    if (!items.length) { html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">Wholesaler has no items yet.</div>'; }
-    else {
+    if (!items.length) {
+      html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">Wholesaler has no items yet.</div>';
+    } else {
       html += `<div class="tbl-wrap"><table class="tbl"><thead><tr>
         <th><input type="checkbox" id="chk-all" onchange="toggleAll(this.checked)"> All</th>
-        <th>Item No</th><th>Name</th><th>Category</th><th>Selling Price</th><th>Min Qty</th><th>Unit</th>
-        ${customCols.map(c=>`<th>${c.name}</th>`).join('')}
+        <th>Item Code</th><th>Name</th><th>Category</th><th>Selling Price</th><th>Min Qty</th><th>Unit</th>
+        ${customCols.map(c => `<th>${c.name}</th>`).join('')}
       </tr></thead><tbody>`;
       items.forEach(i => {
         html += `<tr>
           <td><input type="checkbox" class="item-chk" value="${i.id}"></td>
           <td><b>${i.itemNo}</b></td><td>${i.productName||'-'}</td><td>${i.category||'-'}</td>
           <td><b>₹${i.salePrice}</b></td><td>${i.minQty||1}</td><td>${i.unit||'-'}</td>
-          ${customCols.map(c=>`<td>${i[c.key]||'-'}</td>`).join('')}
+          ${customCols.map(c => `<td>${i[c.key]||'-'}</td>`).join('')}
         </tr>`;
       });
       html += '</tbody></table></div>';
@@ -900,10 +1026,12 @@ function loadRItems() {
     el.innerHTML = html;
     api('GET', '/api/catalogs').then(cats => {
       const sel = document.getElementById('bulk-catalog');
-      if (sel) sel.innerHTML = cats.length ? cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('') : '<option value="">No catalogs yet</option>';
+      if (sel) sel.innerHTML = cats.length
+        ? cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('')
+        : '<option value="">No catalogs yet — create one first</option>';
       window.__rCatalogs = cats;
     });
-  });
+  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
 }
 
 function toggleAll(checked) {
@@ -914,60 +1042,78 @@ function bulkAdd() {
   const ids = Array.from(document.querySelectorAll('.item-chk:checked')).map(c => c.value);
   if (!ids.length) return toast('Select at least one item', true);
   const catalogId = val('bulk-catalog');
-  if (!catalogId) return toast('Create a catalog first', true);
+  if (!catalogId) return toast('Create a catalog first (My Catalogs tab)', true);
   api('POST', '/api/reseller/catalog-items/bulk', {
     catalogId, wholesalerProductIds: ids,
     marginPct: val('bulk-margin'), discountPct: val('bulk-discount')
-  }).then(d => { toast(`${d.count} items added to catalog!`); })
+  }).then(d => toast(`${d.count} items added to catalog!`))
     .catch(e => toast(e.message, true));
 }
 
 function loadRCatalogs() {
   const el = document.getElementById('panel-r-catalogs');
   if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
   api('GET', '/api/catalogs').then(cats => {
     let html = `
-    <div class="sec-hdr"><div><div class="sec-title">My Catalogs</div><div class="sec-sub">Share your catalog link with customers</div></div></div>
-    <div class="card" style="margin-bottom:16px;">
+    <div class="sec-hdr">
+      <div><div class="sec-title">My Catalogs</div><div class="sec-sub">Share your catalog link with customers</div></div>
+      <button class="btn btn-dark btn-sm" onclick="showCreateRCatalog()">+ New Catalog</button>
+    </div>
+    <div class="card" id="r-new-cat-form" style="display:none;margin-bottom:16px;">
       <div class="card-title">Create New Catalog</div>
       <div style="display:flex;gap:10px;">
         <input class="inp" id="r-new-cat" placeholder="Catalog name" style="flex:1;">
-        <button class="btn btn-dark btn-sm" onclick="createRCatalog()">+ Create</button>
+        <button class="btn btn-dark btn-sm" onclick="createRCatalog()">Create</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('r-new-cat-form').style.display='none'">Cancel</button>
       </div>
     </div>`;
-    if (!cats.length) { html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No catalogs yet. Create one and add items from Browse.</div>'; }
-    cats.forEach(c => {
-      const link = `${location.origin}/catalog/${c.ownerId}/${c.slug}`;
-      html += `
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-          <div><div style="font-size:15px;font-weight:800;">${c.name}</div><div style="font-size:11px;color:#888;">Slug: ${c.slug}</div></div>
-          <a href="${link}" target="_blank" class="btn btn-outline btn-sm">View Public Catalog →</a>
-        </div>
-        <div class="link-box">
-          <span class="link-url">${link}</span>
-          <button class="btn btn-outline btn-sm" onclick="copyLink('/catalog/${c.ownerId}/${c.slug}')">Copy</button>
-        </div>
-      </div>`;
-    });
+    if (!cats.length) {
+      html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No catalogs yet. Click "+ New Catalog" to create one, then add items from Browse Items.</div>';
+    } else {
+      cats.forEach(c => {
+        const link = `${location.origin}/catalog/${c.ownerId}/${c.slug}`;
+        html += `<div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+            <div><div style="font-size:15px;font-weight:800;">${c.name}</div><div style="font-size:11px;color:#888;">Slug: ${c.slug}</div></div>
+            <a href="${link}" target="_blank" class="btn btn-outline btn-sm">View Public Catalog →</a>
+          </div>
+          <div class="link-box">
+            <span class="link-url">${link}</span>
+            <button class="btn btn-outline btn-sm" onclick="copyLink('/catalog/${c.ownerId}/${c.slug}')">Copy</button>
+          </div>
+        </div>`;
+      });
+    }
     el.innerHTML = html;
     window.__rCatalogs = cats;
-  });
+  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
+}
+
+function showCreateRCatalog() {
+  const f = document.getElementById('r-new-cat-form');
+  if (f) f.style.display = f.style.display === 'none' ? '' : 'none';
 }
 
 function createRCatalog() {
   const name = val('r-new-cat');
   if (!name) return toast('Enter a catalog name', true);
-  api('POST', '/api/catalogs', { name }).then(() => { toast('Catalog created!'); loadRCatalogs(); loadRItems(); }).catch(e => toast(e.message, true));
+  api('POST', '/api/catalogs', { name }).then(() => {
+    toast('Catalog created!');
+    __loadedTabs['r-catalogs'] = false; loadTab('r-catalogs');
+    __loadedTabs['r-browse'] = false; loadTab('r-browse');
+  }).catch(e => toast(e.message, true));
 }
 
 function loadROrders() {
   const el = document.getElementById('panel-r-orders');
   if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
   api('GET', '/api/orders').then(os => {
     let html = `<div class="sec-hdr"><div><div class="sec-title">My Orders</div><div class="sec-sub">Customer orders on your catalog</div></div></div>`;
-    if (!os.length) { html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No orders yet.</div>'; }
-    else {
+    if (!os.length) {
+      html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No orders yet.</div>';
+    } else {
       html += `<div class="tbl-wrap"><table class="tbl"><thead><tr>
         <th>Order No</th><th>Customer</th><th>Phone</th><th>Date</th><th>Total</th><th>Forwarded</th><th>Action</th>
       </tr></thead><tbody>`;
@@ -981,28 +1127,28 @@ function loadROrders() {
       html += '</tbody></table></div>';
     }
     el.innerHTML = html;
-  });
+  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
 }
 
 function forwardOrder(id) {
   if (!confirm('Forward this order to wholesaler at original wholesale prices?')) return;
   api('POST', `/api/orders/${id}/forward-to-wholesaler`)
-    .then(() => { toast('Order forwarded to wholesaler!'); loadROrders(); })
+    .then(() => { toast('Order forwarded!'); __loadedTabs['r-orders'] = false; loadTab('r-orders'); })
     .catch(e => toast(e.message, true));
 }
 
 // ── ADMIN DASHBOARD ───────────────────────────────────────────────────────
 function renderAdminDash() {
-  const tabs = [
+  renderSidebar([
     { id: 'a-wholesalers', icon: '🏭', label: 'Wholesalers' },
-    { id: 'a-resellers', icon: '🛍️', label: 'Resellers' },
-  ];
-  renderSidebar(tabs, 'a-wholesalers');
+    { id: 'a-resellers',   icon: '🛍️', label: 'Resellers' },
+  ], 'a-wholesalers');
 }
 
 function loadAdminWholesalers() {
   const el = document.getElementById('panel-a-wholesalers');
   if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
   api('GET', '/api/admin/wholesalers').then(ws => {
     let html = `<div class="sec-hdr"><div><div class="sec-title">All Wholesalers</div><div class="sec-sub">${ws.length} registered</div></div></div>`;
     if (!ws.length) { html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No wholesalers yet.</div>'; }
@@ -1012,25 +1158,26 @@ function loadAdminWholesalers() {
       html += '</tbody></table></div>';
     }
     el.innerHTML = html;
-  });
+  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
 }
 
 function loadAdminResellers() {
   const el = document.getElementById('panel-a-resellers');
   if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
   api('GET', '/api/admin/resellers').then(rs => {
     let html = `<div class="sec-hdr"><div><div class="sec-title">All Resellers</div><div class="sec-sub">${rs.length} registered</div></div></div>`;
     if (!rs.length) { html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No resellers yet.</div>'; }
     else {
       html += `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Firm</th><th>User ID</th><th>Wholesaler</th><th>Email</th><th>Status</th></tr></thead><tbody>`;
       rs.forEach(r => {
-        const statusBadge = r.status === 'approved' ? 'bg-green' : r.status === 'pending' ? 'bg-amber' : 'bg-red';
-        html += `<tr><td><b>${r.firmName}</b></td><td>${r.userId}</td><td>${r.wholesalerSlug||'-'}</td><td>${r.email||'-'}</td><td><span class="badge ${statusBadge}">${r.status}</span></td></tr>`;
+        const badge = r.status === 'approved' ? 'bg-green' : r.status === 'pending' ? 'bg-amber' : 'bg-red';
+        html += `<tr><td><b>${r.firmName}</b></td><td>${r.userId}</td><td>${r.wholesalerSlug||'-'}</td><td>${r.email||'-'}</td><td><span class="badge ${badge}">${r.status}</span></td></tr>`;
       });
       html += '</tbody></table></div>';
     }
     el.innerHTML = html;
-  });
+  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
 }
 
 // ── PUBLIC CATALOG ────────────────────────────────────────────────────────
@@ -1042,7 +1189,7 @@ function renderPublicCatalog(userId, slug) {
     __cart = [];
     __pubCatalogId = d.catalog.id;
     window.__pubSchema = d.schema || {};
-    const initial = (d.owner.firmName||'?')[0].toUpperCase();
+    const initial = (d.owner.firmName || '?')[0].toUpperCase();
     let html = `
     <div class="pub-brand-bar">
       <div class="pub-brand-left">
@@ -1059,26 +1206,27 @@ function renderPublicCatalog(userId, slug) {
       <div class="pub-products-layout">
         <div class="pub-products-main">
           <div class="pgrid" id="pub-pgrid">`;
+
     d.products.forEach(p => {
       const discounted = p.discPrice && p.salePrice && p.discPrice < p.salePrice;
       const displayPrice = p.discPrice || p.salePrice;
-      const discPct = discounted ? Math.round((1 - p.discPrice/p.salePrice)*100) : 0;
+      const discPct = discounted ? Math.round((1 - p.discPrice / p.salePrice) * 100) : 0;
+      const schema = window.__pubSchema || {};
+      let customHtml = '';
+      for (let i = 1; i <= 13; i++) {
+        const f = schema[`field${i}`]; const v = p[`field${i}`];
+        if (f && f.enabled && f.name && v) {
+          customHtml += `<div class="pmeta" style="font-size:10px;"><b>${f.name}:</b> ${f.type==='number'&&f.decimals ? Number(v).toFixed(f.decimals) : v}</div>`;
+        }
+      }
       html += `
       <div class="pcard" id="pcard-${p.id}">
         <div class="pph">📦</div>
         <div class="pbody">
-          <div class="pname">${p.productName||p.itemNo}</div>
+          <div class="pname">${p.productName || p.itemNo}</div>
           <div class="pcode">${p.itemNo}</div>
           ${p.category ? `<div class="pmeta">${p.category}</div>` : ''}
-          ${(()=>{
-            const schema = window.__pubSchema || {};
-            let extra = '';
-            for (let i = 1; i <= 13; i++) {
-              const f = schema[`field${i}`]; const v = p[`field${i}`];
-              if (f && f.enabled && f.name && v) extra += `<div class="pmeta" style="font-size:10px;"><b>${f.name}:</b> ${f.type==='number'&&f.decimals?Number(v).toFixed(f.decimals):v}</div>`;
-            }
-            return extra;
-          })()}
+          ${customHtml}
           <div class="price-row">
             <span class="pnow">₹${displayPrice}</span>
             ${discounted ? `<span class="pwas">₹${p.salePrice}</span><span class="pdisc">${discPct}% off</span>` : ''}
@@ -1095,6 +1243,7 @@ function renderPublicCatalog(userId, slug) {
         </div>
       </div>`;
     });
+
     html += `</div></div>
         <div class="cart-sidebar">
           <div class="cart-box">
@@ -1122,8 +1271,8 @@ function changeQty(pid, delta) {
   const el = document.getElementById('qty-' + pid);
   if (!el) return;
   const p = __pubProducts.find(x => x.id === pid);
-  const min = p ? (p.minQty||1) : 1;
-  el.textContent = Math.max(min, (parseInt(el.textContent)||min) + delta);
+  const min = p ? (p.minQty || 1) : 1;
+  el.textContent = Math.max(min, (parseInt(el.textContent) || min) + delta);
 }
 
 function addToCart(pid) {
@@ -1131,7 +1280,7 @@ function addToCart(pid) {
   const qty = parseInt(document.getElementById('qty-' + pid).textContent) || 1;
   const existing = __cart.find(c => c.pid === pid);
   if (existing) { existing.qty = qty; }
-  else { __cart.push({ pid, itemNo: p.itemNo, productName: p.productName||p.itemNo, qty, unit: p.unit, price: p.discPrice || p.salePrice }); }
+  else { __cart.push({ pid, itemNo: p.itemNo, productName: p.productName || p.itemNo, qty, unit: p.unit, price: p.discPrice || p.salePrice }); }
   const btn = document.getElementById('atc-' + pid);
   if (btn) { btn.textContent = 'In Cart ✓'; btn.className = 'btn-incart'; }
   renderCartSidebar();
@@ -1139,28 +1288,41 @@ function addToCart(pid) {
 
 function renderCartSidebar() {
   const body = document.getElementById('cart-body');
-  const total = document.getElementById('cart-total');
-  const cnt = document.getElementById('cart-cnt');
+  const totalEl = document.getElementById('cart-total');
+  const cntEl = document.getElementById('cart-cnt');
   if (!body) return;
-  if (!__cart.length) { body.innerHTML = '<div class="cart-empty">Your cart is empty</div>'; if(total) total.textContent='₹0'; if(cnt) cnt.textContent='0'; return; }
-  let sum = 0;
-  let html = '';
+  if (!__cart.length) {
+    body.innerHTML = '<div class="cart-empty">Your cart is empty</div>';
+    if (totalEl) totalEl.textContent = '₹0';
+    if (cntEl) cntEl.textContent = '0';
+    return;
+  }
+  let sum = 0, html = '';
   __cart.forEach(c => {
     sum += c.price * c.qty;
-    html += `<div class="citem"><div class="citem-name">${c.productName}</div><div class="citem-sub">${c.itemNo} · ${c.qty} ${c.unit||'pcs'} · ₹${c.price} each</div><div style="font-size:12px;font-weight:700;color:#2e3192;margin-top:2px;">₹${c.price*c.qty}</div></div>`;
+    html += `<div class="citem">
+      <div class="citem-name">${c.productName}</div>
+      <div class="citem-sub">${c.itemNo} · ${c.qty} ${c.unit||'pcs'} · ₹${c.price} each</div>
+      <div style="font-size:12px;font-weight:700;color:#2e3192;margin-top:2px;">₹${(c.price * c.qty).toFixed(2)}</div>
+    </div>`;
   });
   body.innerHTML = html;
-  if (total) total.textContent = '₹' + sum.toFixed(2);
-  if (cnt) cnt.textContent = __cart.length;
+  if (totalEl) totalEl.textContent = '₹' + sum.toFixed(2);
+  if (cntEl) cntEl.textContent = __cart.length;
   window.__cartTotal = sum;
 }
 
 function openOrderModal() {
   if (!__cart.length) return toast('Add items to cart first', true);
   let summary = '';
-  __cart.forEach(c => { summary += `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0f0f0;"><span>${c.productName} ×${c.qty}</span><span style="font-weight:700;">₹${(c.price*c.qty).toFixed(2)}</span></div>`; });
+  __cart.forEach(c => {
+    summary += `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0f0f0;">
+      <span>${c.productName} ×${c.qty}</span>
+      <span style="font-weight:700;">₹${(c.price * c.qty).toFixed(2)}</span>
+    </div>`;
+  });
   document.getElementById('order-summary').innerHTML = summary;
-  document.getElementById('order-total-display').textContent = '₹' + (window.__cartTotal||0).toFixed(2);
+  document.getElementById('order-total-display').textContent = '₹' + (window.__cartTotal || 0).toFixed(2);
   document.getElementById('order-overlay').className = 'overlay open';
 }
 
@@ -1170,7 +1332,10 @@ function submitOrder() {
   const errEl = document.getElementById('o-err');
   errEl.style.display = 'none';
   const name = val('o-name'), phone = val('o-phone'), address = val('o-address');
-  if (!name || !phone || !address) { errEl.textContent = 'Name, phone, and address are required.'; errEl.style.display = 'block'; return; }
+  if (!name || !phone || !address) {
+    errEl.textContent = 'Name, phone, and address are required.';
+    errEl.style.display = 'block'; return;
+  }
   api('POST', '/api/orders', {
     catalogId: __pubCatalogId,
     customerName: name, customerPhone: phone, customerEmail: val('o-email'), address,
@@ -1179,8 +1344,7 @@ function submitOrder() {
   }).then(d => {
     closeOrderModal();
     toast(`Order placed! ${d.orderNo}`);
-    __cart = [];
-    renderCartSidebar();
+    __cart = []; renderCartSidebar();
     document.querySelectorAll('.btn-incart').forEach(b => { b.textContent = 'Add to Cart'; b.className = 'btn-atc'; });
   }).catch(e => { errEl.textContent = e.message; errEl.style.display = 'block'; });
 }

@@ -1600,12 +1600,24 @@ function loadAdminWholesalers() {
     let html = `<div class="sec-hdr"><div><div class="sec-title">All Wholesalers</div><div class="sec-sub">${ws.length} registered</div></div></div>`;
     if (!ws.length) { html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No wholesalers yet.</div>'; }
     else {
-      html += `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Firm</th><th>User ID</th><th>Contact</th><th>Email</th><th>Slug</th></tr></thead><tbody>`;
-      ws.forEach(w => html += `<tr><td><b>${w.firmName}</b></td><td>${w.userId}</td><td>${w.contactPerson||'-'}</td><td>${w.email||'-'}</td><td><code>${w.slug}</code></td></tr>`);
+      html += `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Firm</th><th>User ID</th><th>Contact</th><th>Email</th><th>Slug</th><th>Action</th></tr></thead><tbody>`;
+      ws.forEach(w => html += `<tr>
+        <td><b>${w.firmName}</b></td><td>${w.userId}</td>
+        <td>${w.contactPerson||'-'}</td><td>${w.email||'-'}</td>
+        <td><code>${w.slug}</code></td>
+        <td><button class="btn-danger-sm" onclick="deleteWholesaler('${w.id}','${(w.firmName||'').replace(/'/g,"\\'")}')">Delete</button></td>
+      </tr>`);
       html += '</tbody></table></div>';
     }
     el.innerHTML = html;
   }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
+}
+
+function deleteWholesaler(id, firmName) {
+  if (!confirm(`⚠️ Delete wholesaler "${firmName}"?\n\nThis will permanently delete:\n• All their catalogs and products\n• All their reseller accounts\n• All B2B orders\n\nThis cannot be undone.`)) return;
+  api('DELETE', `/api/admin/wholesalers/${id}`)
+    .then(d => { toast(d.message || 'Wholesaler deleted'); __loadedTabs['a-wholesalers'] = false; loadTab('a-wholesalers'); })
+    .catch(e => toast(e.message, true));
 }
 
 function loadAdminResellers() {

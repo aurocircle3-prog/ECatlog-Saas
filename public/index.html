@@ -441,6 +441,7 @@ function loadTab(id) {
   __loadedTabs[id] = true;
   if (id === 'w-items') loadItemMaster();
   else if (id === 'w-catalogs') loadWCatalogs();
+  else if (id === 'w-format') loadDisplayFormat();
   else if (id === 'w-fields') loadFieldSettings();
   else if (id === 'w-resellers') loadWResellers();
   else if (id === 'w-orders') loadWOrders();
@@ -565,6 +566,7 @@ function renderWholesalerDash() {
   renderSidebar([
     { id: 'w-items',    icon: '📝', label: 'Item Master' },
     { id: 'w-catalogs', icon: '📦', label: 'Catalogs' },
+    { id: 'w-format',   icon: '🎨', label: 'Display Format' },
     { id: 'w-fields',   icon: '⚙️', label: 'Field Settings' },
     { id: 'w-resellers',icon: '👥', label: 'Resellers' },
     { id: 'w-orders',   icon: '📋', label: 'B2B Orders' },
@@ -1774,6 +1776,150 @@ function toggleDecimal(i, type) {
   if (type === 'text') dec.value = 0;
 }
 
+// ── WHOLESALER: DISPLAY FORMAT ────────────────────────────────────────────
+function loadDisplayFormat() {
+  const el = document.getElementById('panel-w-format');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
+  Promise.all([
+    api('GET', '/api/wholesaler/field-schema'),
+    api('GET', '/api/wholesaler/display-format').catch(() => ({}))
+  ]).then(([schema, fmt]) => {
+    window.__fieldSchema = schema;
+    renderDisplayFormatPanel(el, schema, fmt);
+  });
+}
+
+function renderDisplayFormatPanel(el, schema, fmt) {
+  // Collect all enabled fields
+  const allFields = [];
+  const numFields = [];
+  for (let i = 1; i <= 13; i++) {
+    const f = schema[`field${i}`];
+    if (f && f.enabled && f.name) {
+      allFields.push({ key: `field${i}`, name: f.name, type: f.type });
+      if (f.type === 'number' || f.type === 'decimal') numFields.push({ key: `field${i}`, name: f.name });
+    }
+  }
+  // Also add WSP as a numeric option
+  const numOptions = [{ key: 'salePrice', name: 'WSP' }, ...numFields];
+
+  const sel = (id, options, val, placeholder='— None —') =>
+    `<select class="inp" id="${id}" style="min-width:160px;">
+      <option value="">${placeholder}</option>
+      ${options.map(o => `<option value="${o.key}" ${val===o.key?'selected':''}>${o.name}</option>`).join('')}
+    </select>`;
+
+  const allOptions = [{ key: 'salePrice', name: 'WSP' }, { key: 'productName', name: 'Product Name' }, { key: 'minQty', name: 'Min Qty' }, { key: 'unit', name: 'Unit' }, ...allFields];
+
+  const f = fmt || {};
+
+  // Details checkboxes — show all enabled fields
+  const detailChecks = allFields.map(f2 => {
+    const checked = !f.details || f.details.includes(f2.key) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:6px;padding:5px 0;cursor:pointer;">
+      <input type="checkbox" class="df-detail-chk" value="${f2.key}" ${checked}> ${f2.name}
+    </label>`;
+  }).join('');
+
+  el.innerHTML = `
+  <div class="sec-hdr">
+    <div><div class="sec-title">Display Format</div><div class="sec-sub">Controls how products look in all catalogs</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+
+    <!-- Zone 1: Image Tags -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px;">📸 Image Tags <span style="font-weight:normal;font-size:11px;color:#888;">(2 text overlays at bottom of image)</span></div>
+      <div style="background:#f5f5f5;border-radius:8px;padding:10px;margin-bottom:12px;font-size:11px;color:#666;">
+        Like the screenshot — 2 short labels shown over the image bottom-right corner.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Tag 1</label>
+          ${sel('df-tag1', allFields, f.imageTags?.[0]||'')}
+        </div>
+        <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Tag 2</label>
+          ${sel('df-tag2', allFields, f.imageTags?.[1]||'')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Zone 2: Below Image (3 lines) -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px;">📋 Below Image <span style="font-weight:normal;font-size:11px;color:#888;">(always visible, max 3 lines)</span></div>
+      <div style="background:#f5f5f5;border-radius:8px;padding:10px;margin-bottom:12px;font-size:11px;color:#666;">
+        Line 1 is always the Product Name. Configure the price line and a 3rd line.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="padding:8px;background:#f0f4ff;border-radius:6px;font-size:12px;color:#2e3192;font-weight:600;">Line 1: Product Name (fixed)</div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px;">Line 2: Price</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="font-size:11px;color:#666;width:100px;">Main price</label>
+              ${sel('df-price-main', numOptions, f.belowImage?.priceField||'salePrice')}
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="font-size:11px;color:#666;width:100px;">Strikethrough<br><span style="color:#aaa;">(MRP)</span></label>
+              ${sel('df-price-mrp', numOptions, f.belowImage?.mrpField||'')}
+            </div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+              <input type="checkbox" id="df-show-discount" ${f.belowImage?.showDiscount!==false?'checked':''}> Show discount % automatically
+            </label>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Line 3 (optional)</label>
+          ${sel('df-line3', allOptions, f.belowImage?.line3Field||'minQty')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Zone 3: Details (collapsible) -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px;">📂 Details <span style="font-weight:normal;font-size:11px;color:#888;">(collapsible section)</span></div>
+      <div style="background:#f5f5f5;border-radius:8px;padding:10px;margin-bottom:12px;font-size:11px;color:#666;">
+        Shown as LABEL + Value chips (e.g. COLOR Silver). Tick the fields to include.
+      </div>
+      ${allFields.length ? `<div style="display:flex;flex-direction:column;">${detailChecks}</div>` : '<div style="color:#aaa;font-size:12px;">No custom fields defined yet. Add them in Field Settings.</div>'}
+    </div>
+
+  </div>
+
+  <!-- Preview label -->
+  <div style="margin-top:16px;padding:12px;background:#fff9e6;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;">
+    <b>Preview:</b> Image → <b>[Tag1] [Tag2]</b> overlaid → Product Name → Price (main / strikethrough / discount%) → Line 3 → <b>[Details chips]</b> (collapsible)
+  </div>
+
+  <div style="margin-top:16px;">
+    <button class="btn btn-dark" onclick="btnAction(this, saveDisplayFormat)">Save Display Format</button>
+    <span id="df-msg" style="margin-left:12px;font-size:12px;"></span>
+  </div>`;
+}
+
+function saveDisplayFormat() {
+  const imageTags = [
+    document.getElementById('df-tag1')?.value||'',
+    document.getElementById('df-tag2')?.value||''
+  ].filter(Boolean);
+
+  const belowImage = {
+    priceField: document.getElementById('df-price-main')?.value || 'salePrice',
+    mrpField: document.getElementById('df-price-mrp')?.value || '',
+    showDiscount: document.getElementById('df-show-discount')?.checked !== false,
+    line3Field: document.getElementById('df-line3')?.value || ''
+  };
+
+  const details = Array.from(document.querySelectorAll('.df-detail-chk:checked')).map(c => c.value);
+
+  const displayFormat = { imageTags, belowImage, details };
+  return api('PUT', '/api/wholesaler/display-format', { displayFormat }).then(() => {
+    document.getElementById('df-msg').innerHTML = '<span style="color:#16a34a;">✓ Saved!</span>';
+    setTimeout(() => { const m = document.getElementById('df-msg'); if (m) m.innerHTML = ''; }, 2000);
+  });
+}
+
 function loadFieldSettings() {
   const el = document.getElementById('panel-w-fields');
   if (!el) return;
@@ -2234,10 +2380,13 @@ function renderPublicCatalog(userId, slug) {
     __pubCatalogId = d.catalog.id;
     window.__pubSchema = d.schema || {};
     const df = d.displayFormat || {};
-    const viewType = df.viewType || 'grid';
-    const showImages = df.showImages !== false;
-    const dfFields = df.fields || [];
     const schema = window.__pubSchema || {};
+
+    // New 3-zone display format
+    const imageTags = df.imageTags || [];
+    const belowImg = df.belowImage || { priceField: 'salePrice', mrpField: '', showDiscount: true, line3Field: 'minQty' };
+    const detailFields = df.details || [];
+    const showImages = df.showImages !== false;
 
     const initial = (d.owner.firmName || '?')[0].toUpperCase();
     let html = `
@@ -2256,103 +2405,94 @@ function renderPublicCatalog(userId, slug) {
       <div class="pub-products-layout">
         <div class="pub-products-main">`;
 
-    // Determine visible fields in display order
-    const visibleFields = dfFields.length
-      ? dfFields.filter(f => f.show !== false)
-      : (() => {
-          const auto = [];
-          for (let i = 1; i <= 13; i++) {
-            const f = schema[`field${i}`];
-            if (f && f.enabled && f.name) auto.push({ key: `field${i}`, formula: '' });
-          }
-          return auto;
-        })();
+    // Helper: get field value by key
+    const fval = (p, key) => {
+      if (key === 'salePrice') return p.salePrice || 0;
+      if (key === 'minQty') return p.minQty || 1;
+      if (key === 'unit') return p.unit || '';
+      if (key === 'productName') return p.productName || '';
+      const sc = schema[key];
+      const v = p[key];
+      if (sc && sc.type === 'number' && sc.decimals) return v ? Number(v).toFixed(sc.decimals) : '';
+      return v || '';
+    };
+    const fname = key => {
+      if (key === 'salePrice') return 'WSP';
+      if (key === 'minQty') return 'Min Qty';
+      if (key === 'unit') return 'Unit';
+      const sc = schema[key]; return sc ? sc.name : key;
+    };
 
-    if (viewType === 'list') {
-      // List view: table
-      html += `<div class="tbl-wrap"><table class="tbl"><thead><tr>
-        ${showImages ? '<th style="width:60px;">Image</th>' : ''}
-        <th>Item Code</th><th>Name</th>
-        ${visibleFields.map(f => { const sc = schema[Object.keys(schema).find(k => k === f.key)]; return `<th>${sc ? sc.name : f.key}</th>`; }).join('')}
-        <th>Price</th><th>Order</th>
-      </tr></thead><tbody>`;
+    html += `<div class="pgrid" id="pub-pgrid">`;
+    d.products.forEach(p => {
+      // Price line
+      const mainPrice = belowImg.priceField ? fval(p, belowImg.priceField) : p.salePrice || 0;
+      const mrpPrice  = belowImg.mrpField   ? fval(p, belowImg.mrpField)   : 0;
+      const discPct   = belowImg.showDiscount && mrpPrice && mainPrice && Number(mrpPrice) > Number(mainPrice)
+        ? Math.round((1 - Number(mainPrice) / Number(mrpPrice)) * 100) : 0;
 
-      d.products.forEach(p => {
-        const discounted = p.discPrice && p.salePrice && p.discPrice < p.salePrice;
-        const displayPrice = p.discPrice || p.salePrice;
-        const discPct = discounted ? Math.round((1 - p.discPrice / p.salePrice) * 100) : 0;
-        html += `<tr>
-          ${showImages ? `<td>${p.imageUrl ? `<img src="${p.imageUrl}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;">` : '📷'}</td>` : ''}
-          <td><b>${p.itemNo}</b></td>
-          <td>${p.productName||p.itemNo}</td>
-          ${visibleFields.map(f => {
-            const fval = f.formula ? evalFormulaField(f.formula, p, schema) : p[f.key];
-            const sc = schema[f.key];
-            const disp = fval !== null && fval !== undefined ? (sc && sc.type === 'number' && sc.decimals ? Number(fval).toFixed(sc.decimals) : fval) : '-';
-            return `<td>${disp}</td>`;
-          }).join('')}
-          <td><span class="pnow" style="font-size:13px;">₹${displayPrice}</span>${discounted ? ` <span class="pdisc">${discPct}% off</span>` : ''}</td>
-          <td>
-            <div class="qty-cart-row" style="flex-wrap:nowrap;">
-              <div class="qctrl"><button class="qbtn" onclick="changeQty('${p.id}',-1)">−</button><span class="qval" id="qty-${p.id}">${p.minQty||1}</span><button class="qbtn" onclick="changeQty('${p.id}',1)">+</button></div>
-              <button class="btn-atc" id="atc-${p.id}" onclick="addToCart('${p.id}')">Add</button>
-            </div>
-          </td>
-        </tr>`;
-      });
-      html += '</tbody></table></div>';
-    } else {
-      // Grid view
-      html += `<div class="pgrid" id="pub-pgrid">`;
-      d.products.forEach(p => {
-        const discounted = p.discPrice && p.salePrice && p.discPrice < p.salePrice;
-        const displayPrice = p.discPrice || p.salePrice;
-        const discPct = discounted ? Math.round((1 - p.discPrice / p.salePrice) * 100) : 0;
-        let customHtml = '';
-        if (visibleFields.length) {
-          visibleFields.forEach(f => {
-            const fval = f.formula ? evalFormulaField(f.formula, p, schema) : p[f.key];
-            const sc = schema[f.key];
-            if (fval !== null && fval !== undefined && fval !== '') {
-              const label = sc ? sc.name : f.key;
-              const disp = sc && sc.type === 'number' && sc.decimals ? Number(fval).toFixed(sc.decimals) : fval;
-              customHtml += `<div class="pmeta" style="font-size:10px;"><b>${label}:</b> ${disp}</div>`;
-            }
-          });
-        } else {
-          for (let i = 1; i <= 13; i++) {
-            const f = schema[`field${i}`]; const v = p[`field${i}`];
-            if (f && f.enabled && f.name && v) {
-              customHtml += `<div class="pmeta" style="font-size:10px;"><b>${f.name}:</b> ${f.type==='number'&&f.decimals ? Number(v).toFixed(f.decimals) : v}</div>`;
-            }
-          }
+      // Image overlay tags
+      const tagHtml = imageTags.filter(k=>k&&fval(p,k)).map(k =>
+        `<span style="background:rgba(0,0,0,0.55);color:#fff;font-size:10px;padding:2px 7px;border-radius:3px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fval(p,k)}</span>`
+      ).join('');
+
+      // Line 3
+      const line3Key = belowImg.line3Field;
+      const line3Val = line3Key ? fval(p, line3Key) : '';
+      const line3Label = line3Key ? fname(line3Key) : '';
+
+      // Details chips
+      const detailChips = detailFields.map(key => {
+        const v = fval(p, key); if (!v) return '';
+        return `<span style="display:inline-flex;flex-direction:column;align-items:center;border:1px solid #e0e0e0;border-radius:6px;padding:3px 10px;font-size:10px;line-height:1.3;">
+          <span style="color:#888;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;">${fname(key)}</span>
+          <span style="color:#111;font-weight:600;">${v}</span>
+        </span>`;
+      }).filter(Boolean).join('');
+
+      // Fallback details if none configured
+      const detailsBody = detailChips || (() => {
+        let ch = '';
+        for (let i = 1; i <= 13; i++) {
+          const f = schema[`field${i}`]; const v = p[`field${i}`];
+          if (f && f.enabled && f.name && v) ch += `<span style="display:inline-flex;flex-direction:column;align-items:center;border:1px solid #e0e0e0;border-radius:6px;padding:3px 10px;font-size:10px;line-height:1.3;"><span style="color:#888;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;">${f.name}</span><span style="color:#111;font-weight:600;">${v}</span></span>`;
         }
-        html += `
-        <div class="pcard" id="pcard-${p.id}">
-          <div class="pph">${showImages && p.imageUrl ? `<img src="${p.imageUrl}" style="width:100%;height:100%;object-fit:cover;">` : (showImages ? '📦' : '')}</div>
-          <div class="pbody">
-            <div class="pname">${p.productName || p.itemNo}</div>
-            <div class="pcode">${p.itemNo}</div>
-            ${p.category ? `<div class="pmeta">${p.category}</div>` : ''}
-            ${customHtml}
-            <div class="price-row">
-              <span class="pnow">₹${displayPrice}</span>
-              ${discounted ? `<span class="pwas">₹${p.salePrice}</span><span class="pdisc">${discPct}% off</span>` : ''}
-            </div>
-            ${p.minQty > 1 ? `<div class="pminord">Min order: ${p.minQty} ${p.unit||'pcs'}</div>` : ''}
-            <div class="qty-cart-row">
-              <div class="qctrl">
-                <button class="qbtn" onclick="changeQty('${p.id}',-1)">−</button>
-                <span class="qval" id="qty-${p.id}">${p.minQty||1}</span>
-                <button class="qbtn" onclick="changeQty('${p.id}',1)">+</button>
-              </div>
-              <button class="btn-atc" id="atc-${p.id}" onclick="addToCart('${p.id}')">Add to Cart</button>
-            </div>
+        return ch;
+      })();
+
+      html += `
+      <div class="pcard" id="pcard-${p.id}">
+        <div class="pph" style="position:relative;">
+          ${showImages && p.imageUrl ? `<img src="${p.imageUrl}" style="width:100%;height:100%;object-fit:cover;">` : (showImages ? `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;color:#ddd;background:#f9f9f9;">📷</div>` : '')}
+          ${tagHtml ? `<div style="position:absolute;bottom:6px;right:6px;display:flex;flex-direction:column;align-items:flex-end;gap:3px;">${tagHtml}</div>` : ''}
+        </div>
+        <div class="pbody">
+          <div class="pname">${p.productName || p.itemNo}</div>
+          <div class="price-row" style="margin:4px 0;">
+            <span class="pnow">₹${mainPrice}</span>
+            ${mrpPrice && Number(mrpPrice)>Number(mainPrice) ? `<span class="pwas" style="text-decoration:line-through;color:#aaa;font-size:12px;">₹${mrpPrice}</span>` : ''}
+            ${discPct > 0 ? `<span class="pdisc" style="color:#e53e3e;font-size:11px;font-weight:700;">${discPct}% off</span>` : ''}
           </div>
-        </div>`;
-      });
-      html += '</div>';
-    }
+          ${line3Val ? `<div style="font-size:11px;color:#666;margin-bottom:4px;">Min: ${line3Val} ${line3Key==='minQty'?(p.unit||'Pcs'):''}</div>` : ''}
+          ${detailsBody ? `
+          <details style="margin-bottom:8px;">
+            <summary style="font-size:12px;font-weight:600;color:#2e3192;cursor:pointer;padding:4px 0;list-style:none;display:flex;align-items:center;justify-content:space-between;">
+              Details <span style="font-size:10px;">▼</span>
+            </summary>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;padding:8px 0;">${detailsBody}</div>
+          </details>` : ''}
+          <div class="qty-cart-row">
+            <div class="qctrl">
+              <button class="qbtn" onclick="changeQty('${p.id}',-1)">−</button>
+              <span class="qval" id="qty-${p.id}">${p.minQty||1}</span>
+              <button class="qbtn" onclick="changeQty('${p.id}',1)">+</button>
+            </div>
+            <button class="btn-atc" id="atc-${p.id}" onclick="addToCart('${p.id}')">+ Add to cart</button>
+          </div>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
 
     html += `</div>
         <div class="cart-sidebar">

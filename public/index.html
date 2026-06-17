@@ -418,7 +418,8 @@ function switchTab(id) {
 function loadTab(id) {
   if (__loadedTabs[id]) return;
   __loadedTabs[id] = true;
-  if (id === 'w-catalogs') loadWCatalogs();
+  if (id === 'w-items') loadItemMaster();
+  else if (id === 'w-catalogs') loadWCatalogs();
   else if (id === 'w-fields') loadFieldSettings();
   else if (id === 'w-resellers') loadWResellers();
   else if (id === 'w-orders') loadWOrders();
@@ -541,11 +542,12 @@ function doRegisterReseller(slug) {
 // ── WHOLESALER DASHBOARD ──────────────────────────────────────────────────
 function renderWholesalerDash() {
   renderSidebar([
+    { id: 'w-items',    icon: '📝', label: 'Item Master' },
     { id: 'w-catalogs', icon: '📦', label: 'Catalogs' },
     { id: 'w-fields',   icon: '⚙️', label: 'Field Settings' },
     { id: 'w-resellers',icon: '👥', label: 'Resellers' },
     { id: 'w-orders',   icon: '📋', label: 'B2B Orders' },
-  ], 'w-catalogs');
+  ], 'w-items');
 }
 
 // ── WHOLESALER: CATALOGS LIST ─────────────────────────────────────────────
@@ -791,7 +793,392 @@ function uploadCsv(catId) {
     .catch(e => { resEl.innerHTML = `<div style="background:#fce8e8;border-radius:8px;padding:12px;font-size:12px;color:#c0392b;">✗ ${e.message}</div>`; });
 }
 
+// ── WHOLESALER: ITEM MASTER ───────────────────────────────────────────────
+let __itemMasterData = [], __itemMasterSchema = {};
+
+function loadItemMaster() {
+  const el = document.getElementById('panel-w-items');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
+  Promise.all([
+    api('GET', '/api/wholesaler/all-items'),
+    api('GET', '/api/wholesaler/field-schema'),
+    api('GET', '/api/catalogs'),
+  ]).then(([items, schema, cats]) => {
+    __itemMasterData = items;
+    __itemMasterSchema = schema;
+    window.__fieldSchema = schema;
+    window.__wCatalogs = cats;
+    renderItemMasterTable(items, schema, cats);
+  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
+}
+
+function renderItemMasterTable(items, schema, cats) {
+  const el = document.getElementById('panel-w-items');
+  if (!el) return;
+  const customCols = [];
+  for (let i = 1; i <= 13; i++) {
+    const f = schema[`field${i}`];
+    if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, ...f });
+  }
+  const catOptions = (cats||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+  el.innerHTML = `
+  <div class="sec-hdr">
+    <div><div class="sec-title">Item Master</div><div class="sec-sub">${items.length} items total</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-dark btn-sm" onclick="showImAddItem()">+ Add Item</button>
+      <button class="btn btn-outline btn-sm" onclick="showImCsvImport()">Import CSV</button>
+      <button class="btn btn-outline btn-sm" onclick="showImBulkEdit()">Bulk Edit CSV</button>
+      <button class="btn btn-outline btn-sm" onclick="downloadItemsCsv()">Download CSV</button>
+    </div>
+  </div>
+
+  <div id="im-panel" style="margin-bottom:16px;"></div>
+
+  <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;">
+    <input class="inp" id="im-search" placeholder="Search by item code or name..." style="flex:1;max-width:380px;" oninput="filterItems(this.value)">
+    <span style="font-size:12px;color:#888;" id="im-count">${items.length} items</span>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="tbl" id="im-table">
+      <thead><tr>
+        <th style="width:60px;">Image</th>
+        <th>Item Code</th><th>Name</th><th>Category</th><th>Price</th>
+        ${customCols.map(c => `<th>${c.name}</th>`).join('')}
+        <th style="width:100px;">Actions</th>
+      </tr></thead>
+      <tbody id="im-tbody">
+        ${renderImRows(items, customCols)}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function renderImRows(items, customCols) {
+  if (!items.length) return `<tr><td colspan="99" style="text-align:center;padding:40px;color:#bbb;">No items yet. Click "+ Add Item" or "Import CSV" to get started.</td></tr>`;
+  return items.map(p => {
+    const imgHtml = p.imageUrl
+      ? `<img src="${p.imageUrl}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #eee;">`
+      : `<div style="width:40px;height:40px;border-radius:6px;background:#f5f5f5;border:1px solid #eee;display:flex;align-items:center;justify-content:center;font-size:18px;color:#ddd;">📦</div>`;
+    const customTds = (customCols||[]).map(c => `<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;">${p[c.key]||'-'}</td>`).join('');
+    return `<tr id="imrow-${p.id}">
+      <td>${imgHtml}</td>
+      <td><b>${p.itemNo}</b></td>
+      <td>${p.productName||'-'}</td>
+      <td>${p.category||'-'}</td>
+      <td>₹${p.salePrice||0}</td>
+      ${customTds}
+      <td><button class="btn-green-sm" onclick="openEditItem('${p.id}')">Edit</button> <button class="btn-danger-sm" onclick="deleteItem('${p.id}')">Del</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterItems(q) {
+  const items = q.trim()
+    ? __itemMasterData.filter(p => (p.itemNo||'').toLowerCase().includes(q.toLowerCase()) || (p.productName||'').toLowerCase().includes(q.toLowerCase()))
+    : __itemMasterData;
+  const customCols = [];
+  for (let i = 1; i <= 13; i++) {
+    const f = __itemMasterSchema[`field${i}`];
+    if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, ...f });
+  }
+  const tb = document.getElementById('im-tbody');
+  const cnt = document.getElementById('im-count');
+  if (tb) tb.innerHTML = renderImRows(items, customCols);
+  if (cnt) cnt.textContent = items.length + ' items';
+}
+
+function showImAddItem() {
+  const panel = document.getElementById('im-panel');
+  if (!panel) return;
+  const schema = __itemMasterSchema;
+  const customFields = [];
+  for (let i = 1; i <= 13; i++) {
+    const f = schema[`field${i}`];
+    if (f && f.enabled && f.name) customFields.push({ key: `field${i}`, ...f });
+  }
+  const catOptions = (window.__wCatalogs||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('') || '<option value="">No catalogs yet</option>';
+  let customHtml = '';
+  if (customFields.length) {
+    const pairs = [];
+    for (let i = 0; i < customFields.length; i += 2) {
+      const a = customFields[i], b = customFields[i+1];
+      pairs.push(`<div class="frow">
+        <div class="fgd"><label>${a.name}${a.required?' *':''}</label><input class="inp inp-full" id="im-add-${a.key}" type="${a.type==='number'?'number':'text'}" placeholder="${a.name}"></div>
+        ${b ? `<div class="fgd"><label>${b.name}${b.required?' *':''}</label><input class="inp inp-full" id="im-add-${b.key}" type="${b.type==='number'?'number':'text'}" placeholder="${b.name}"></div>` : '<div></div>'}
+      </div>`);
+    }
+    customHtml = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;">${pairs.join('')}</div>`;
+  }
+  panel.innerHTML = `<div class="card" style="border:2px solid #2e3192;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div class="card-title" style="margin:0;">Add New Item</div>
+      <button class="btn btn-outline btn-sm" onclick="hideImPanel()">✕ Close</button>
+    </div>
+    <div id="im-add-msg"></div>
+    <div class="frow">
+      <div class="fgd"><label>Catalog *</label><select class="inp inp-full" id="im-add-catId">${catOptions}</select></div>
+      <div class="fgd"><label>Item Code *</label><input class="inp inp-full" id="im-add-itemNo" placeholder="SKU001"></div>
+    </div>
+    <div class="frow">
+      <div class="fgd"><label>Item Name</label><input class="inp inp-full" id="im-add-productName" placeholder="Product name"></div>
+      <div class="fgd"><label>Category</label><input class="inp inp-full" id="im-add-category" placeholder="Category"></div>
+    </div>
+    <div class="frow">
+      <div class="fgd"><label>Selling Price</label><input class="inp inp-full" id="im-add-salePrice" type="number" placeholder="0.00"></div>
+      <div class="fgd"><label>Image</label><input type="file" class="inp inp-full" id="im-add-image" accept="image/*"></div>
+    </div>
+    ${customHtml}
+    <div style="margin-top:14px;"><button class="btn btn-dark btn-sm" onclick="submitAddItem()">Add Item</button></div>
+  </div>`;
+}
+
+function hideImPanel() { const p = document.getElementById('im-panel'); if (p) p.innerHTML = ''; }
+
+function submitAddItem() {
+  const msgEl = document.getElementById('im-add-msg');
+  msgEl.innerHTML = '';
+  const catId = document.getElementById('im-add-catId')?.value;
+  const itemNo = document.getElementById('im-add-itemNo')?.value?.trim();
+  if (!catId) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Select a catalog.</div>'; return; }
+  if (!itemNo) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code is required.</div>'; return; }
+  const schema = __itemMasterSchema;
+  const body = {
+    itemNo, productName: document.getElementById('im-add-productName')?.value||'',
+    category: document.getElementById('im-add-category')?.value||'',
+    salePrice: document.getElementById('im-add-salePrice')?.value||0,
+  };
+  for (let i = 1; i <= 13; i++) {
+    const f = schema[`field${i}`];
+    if (f && f.enabled && f.name) { const v = document.getElementById(`im-add-field${i}`)?.value; if (v) body[`field${i}`] = v; }
+  }
+  api('POST', `/api/catalogs/${catId}/products`, body).then(p => {
+    const imgFile = document.getElementById('im-add-image')?.files?.[0];
+    if (imgFile) {
+      const fd = new FormData(); fd.append('image', imgFile);
+      return api('POST', `/api/products/${p.id}/image`, fd, true).then(() => p);
+    }
+    return p;
+  }).then(() => {
+    toast('Item added!');
+    hideImPanel();
+    __loadedTabs['w-items'] = false; loadTab('w-items');
+  }).catch(e => { msgEl.innerHTML = `<div class="err-msg" style="display:block;">${e.message}</div>`; });
+}
+
+function openEditItem(id) {
+  const p = __itemMasterData.find(x => x.id === id);
+  if (!p) return;
+  const schema = __itemMasterSchema;
+  const customFields = [];
+  for (let i = 1; i <= 13; i++) {
+    const f = schema[`field${i}`];
+    if (f && f.enabled && f.name) customFields.push({ key: `field${i}`, ...f });
+  }
+  let customHtml = '';
+  if (customFields.length) {
+    const pairs = [];
+    for (let i = 0; i < customFields.length; i += 2) {
+      const a = customFields[i], b = customFields[i+1];
+      pairs.push(`<div class="frow">
+        <div class="fgd"><label>${a.name}${a.required?' *':''}</label><input class="inp inp-full" id="eim-${a.key}" type="${a.type==='number'?'number':'text'}" value="${p[a.key]||''}"></div>
+        ${b ? `<div class="fgd"><label>${b.name}${b.required?' *':''}</label><input class="inp inp-full" id="eim-${b.key}" type="${b.type==='number'?'number':'text'}" value="${p[b.key]||''}"></div>` : '<div></div>'}
+      </div>`);
+    }
+    customHtml = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;">${pairs.join('')}</div>`;
+  }
+  const imgPreview = p.imageUrl
+    ? `<img id="eim-img-preview" src="${p.imageUrl}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #eee;display:block;margin-bottom:8px;">`
+    : `<div id="eim-img-preview" style="width:80px;height:80px;border-radius:8px;background:#f5f5f5;border:1px solid #eee;display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:8px;">📦</div>`;
+
+  const panel = document.getElementById('im-panel');
+  if (!panel) return;
+  panel.innerHTML = `<div class="card" style="border:2px solid #a8ad5c;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div class="card-title" style="margin:0;">Edit Item — ${p.itemNo}</div>
+      <button class="btn btn-outline btn-sm" onclick="hideImPanel()">✕ Close</button>
+    </div>
+    <div id="eim-msg"></div>
+    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+      <div style="flex:1;min-width:280px;">
+        <div class="frow">
+          <div class="fgd"><label>Item Code *</label><input class="inp inp-full" id="eim-itemNo" value="${p.itemNo}"></div>
+          <div class="fgd"><label>Item Name</label><input class="inp inp-full" id="eim-productName" value="${p.productName||''}"></div>
+        </div>
+        <div class="frow">
+          <div class="fgd"><label>Category</label><input class="inp inp-full" id="eim-category" value="${p.category||''}"></div>
+          <div class="fgd"><label>Selling Price</label><input class="inp inp-full" id="eim-salePrice" type="number" value="${p.salePrice||0}"></div>
+        </div>
+        ${customHtml}
+      </div>
+      <div style="flex-shrink:0;">
+        <div style="font-size:11px;font-weight:600;color:#555;margin-bottom:6px;">PRODUCT IMAGE</div>
+        ${imgPreview}
+        <input type="file" class="inp" id="eim-image-file" accept="image/*" style="font-size:11px;padding:6px;">
+        <button class="btn btn-outline btn-sm" style="margin-top:6px;width:100%;" onclick="uploadItemImage('${p.id}')">Upload Image</button>
+        <div id="eim-img-msg" style="font-size:11px;margin-top:4px;"></div>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px;">
+      <button class="btn btn-dark btn-sm" onclick="saveItemEdit('${p.id}')">Save Changes</button>
+    </div>
+  </div>`;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function saveItemEdit(id) {
+  const msgEl = document.getElementById('eim-msg');
+  msgEl.innerHTML = '';
+  const schema = __itemMasterSchema;
+  const body = {
+    itemNo: document.getElementById('eim-itemNo')?.value?.trim(),
+    productName: document.getElementById('eim-productName')?.value||'',
+    category: document.getElementById('eim-category')?.value||'',
+    salePrice: document.getElementById('eim-salePrice')?.value||0,
+  };
+  if (!body.itemNo) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code required.</div>'; return; }
+  for (let i = 1; i <= 13; i++) {
+    const f = schema[`field${i}`];
+    if (f && f.enabled && f.name) { const el = document.getElementById(`eim-field${i}`); if (el) body[`field${i}`] = el.value; }
+  }
+  api('PUT', `/api/products/${id}`, body).then(() => {
+    toast('Item saved!');
+    hideImPanel();
+    __loadedTabs['w-items'] = false; loadTab('w-items');
+  }).catch(e => { msgEl.innerHTML = `<div class="err-msg" style="display:block;">${e.message}</div>`; });
+}
+
+function uploadItemImage(id) {
+  const f = document.getElementById('eim-image-file');
+  if (!f || !f.files[0]) return;
+  const fd = new FormData(); fd.append('image', f.files[0]);
+  const msgEl = document.getElementById('eim-img-msg');
+  msgEl.textContent = 'Uploading...';
+  api('POST', `/api/products/${id}/image`, fd, true).then(d => {
+    msgEl.innerHTML = '<span style="color:#16a34a;">✓ Uploaded!</span>';
+    const prev = document.getElementById('eim-img-preview');
+    if (prev) { prev.outerHTML = `<img id="eim-img-preview" src="${d.imageUrl}?t=${Date.now()}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #eee;display:block;margin-bottom:8px;">`; }
+    const item = __itemMasterData.find(x => x.id === id);
+    if (item) item.imageUrl = d.imageUrl;
+  }).catch(e => { msgEl.innerHTML = `<span style="color:#c0392b;">${e.message}</span>`; });
+}
+
+function deleteItem(id) {
+  if (!confirm('Delete this item?')) return;
+  api('DELETE', `/api/products/${id}`).then(() => {
+    toast('Item deleted');
+    __loadedTabs['w-items'] = false; loadTab('w-items');
+  }).catch(e => toast(e.message, true));
+}
+
+function downloadItemsCsv() {
+  const schema = __itemMasterSchema;
+  const customCols = [];
+  for (let i = 1; i <= 13; i++) {
+    const f = schema[`field${i}`];
+    if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, name: f.name });
+  }
+  const headers = ['Item Code','Item Name','Category','Selling Price','Min Qty','Unit', ...customCols.map(c => c.name)];
+  const rows = __itemMasterData.map(p => [
+    p.itemNo, p.productName||'', p.category||'', p.salePrice||0, p.minQty||1, p.unit||'Pcs',
+    ...customCols.map(c => p[c.key]||'')
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'item-master.csv';
+  a.click();
+}
+
+function showImCsvImport() {
+  const panel = document.getElementById('im-panel');
+  if (!panel) return;
+  const catOptions = (window.__wCatalogs||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('') || '<option value="">No catalogs yet</option>';
+  panel.innerHTML = `<div class="card" style="border:2px solid #2e3192;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div class="card-title" style="margin:0;">Import Items from CSV</div>
+      <button class="btn btn-outline btn-sm" onclick="hideImPanel()">✕ Close</button>
+    </div>
+    <div class="fgd"><label>Target Catalog *</label><select class="inp inp-full" id="im-csv-cat">${catOptions}</select></div>
+    <div style="background:#f0f4ff;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#2e3192;">
+      <b>Columns:</b> Item Code (required) · Item Name · Image Name · Category · and any enabled custom fields<br>
+      <b>Tip:</b> Download template from Field Settings tab.
+    </div>
+    <div style="border:2px dashed #e8e8e8;border-radius:8px;padding:20px;text-align:center;margin-bottom:12px;">
+      <input type="file" id="im-csv-file" accept=".csv,.xlsx,.xls" style="width:100%;">
+    </div>
+    <button class="btn btn-dark btn-sm" onclick="submitImCsvImport()">Import</button>
+    <div id="im-csv-result" style="margin-top:10px;"></div>
+  </div>`;
+}
+
+function submitImCsvImport() {
+  const catId = document.getElementById('im-csv-cat')?.value;
+  const f = document.getElementById('im-csv-file');
+  if (!catId) return toast('Select a catalog', true);
+  if (!f || !f.files[0]) return toast('Select a file first', true);
+  const fd = new FormData(); fd.append('csv', f.files[0]);
+  const resEl = document.getElementById('im-csv-result');
+  resEl.innerHTML = '<div style="font-size:12px;color:#888;">Uploading...</div>';
+  api('POST', `/api/catalogs/${catId}/upload-csv`, fd, true).then(d => {
+    resEl.innerHTML = `<div style="background:#e8f5ec;border-radius:8px;padding:12px;font-size:12px;color:#16a34a;">
+      <b>✓ ${d.message}</b>
+      ${d.errorCount>0?`<div style="color:#946c00;margin-top:4px;">${d.errorCount} rows skipped: ${d.errors.slice(0,3).map(e=>`Row ${e.row}: ${e.errors.join(', ')}`).join(' · ')}</div>`:''}
+    </div>`;
+    __loadedTabs['w-items'] = false; loadTab('w-items');
+  }).catch(e => { resEl.innerHTML = `<div style="background:#fce8e8;border-radius:8px;padding:12px;font-size:12px;color:#c0392b;">✗ ${e.message}</div>`; });
+}
+
+function showImBulkEdit() {
+  const panel = document.getElementById('im-panel');
+  if (!panel) return;
+  panel.innerHTML = `<div class="card" style="border:2px solid #a8ad5c;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div class="card-title" style="margin:0;">Bulk Edit via CSV</div>
+      <button class="btn btn-outline btn-sm" onclick="hideImPanel()">✕ Close</button>
+    </div>
+    <div style="background:#fff3cd;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#7a5b00;">
+      <b>How it works:</b><br>
+      1. Click "Download Current CSV" to get all your items.<br>
+      2. Edit the CSV in Excel/Sheets — <b>keep Item Code unchanged</b>, modify other columns.<br>
+      3. Upload the edited file below — only matching item codes will be updated.
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <button class="btn btn-outline btn-sm" onclick="downloadItemsCsv()">⬇ Download Current CSV</button>
+    </div>
+    <div style="border:2px dashed #e8e8e8;border-radius:8px;padding:20px;text-align:center;margin-bottom:12px;">
+      <input type="file" id="im-bulk-file" accept=".csv,.xlsx,.xls" style="width:100%;">
+    </div>
+    <button class="btn btn-dark btn-sm" onclick="submitBulkEdit()">Upload & Update Items</button>
+    <div id="im-bulk-result" style="margin-top:10px;"></div>
+  </div>`;
+}
+
+function submitBulkEdit() {
+  const f = document.getElementById('im-bulk-file');
+  if (!f || !f.files[0]) return toast('Select a file first', true);
+  const fd = new FormData(); fd.append('csv', f.files[0]);
+  const resEl = document.getElementById('im-bulk-result');
+  resEl.innerHTML = '<div style="font-size:12px;color:#888;">Uploading...</div>';
+  api('POST', '/api/wholesaler/bulk-update-csv', fd, true).then(d => {
+    resEl.innerHTML = `<div style="background:#e8f5ec;border-radius:8px;padding:12px;font-size:12px;color:#16a34a;">
+      <b>✓ ${d.message}</b>
+      ${d.errorCount>0?`<div style="color:#946c00;margin-top:4px;">${d.errorCount} skipped: ${d.errors.slice(0,3).map(e=>`Row ${e.row}: ${e.error}`).join(' · ')}</div>`:''}
+    </div>`;
+    __loadedTabs['w-items'] = false; loadTab('w-items');
+  }).catch(e => { resEl.innerHTML = `<div style="background:#fce8e8;border-radius:8px;padding:12px;font-size:12px;color:#c0392b;">✗ ${e.message}</div>`; });
+}
+
 // ── WHOLESALER: FIELD SETTINGS ────────────────────────────────────────────
+function toggleDecimal(i, type) {
+  const dec = document.getElementById('fs-dec-' + i);
+  if (!dec) return;
+  dec.disabled = type === 'text';
+  if (type === 'text') dec.value = 0;
+}
+
 function loadFieldSettings() {
   const el = document.getElementById('panel-w-fields');
   if (!el) return;
@@ -805,13 +1192,13 @@ function loadFieldSettings() {
         <td style="font-weight:700;color:#555;padding:8px 12px;white-space:nowrap;">Field ${i}</td>
         <td style="padding:6px 8px;"><input class="inp" style="width:100%;min-width:120px;" id="fs-name-${i}" value="${f.name||''}" placeholder="e.g. Colour"></td>
         <td style="padding:6px 8px;text-align:center;">
-          <select class="inp" id="fs-type-${i}" style="width:90px;">
+          <select class="inp" id="fs-type-${i}" style="width:90px;" onchange="toggleDecimal(${i},this.value)">
             <option value="text"${f.type==='text'?' selected':''}>Text</option>
             <option value="number"${f.type==='number'?' selected':''}>Number</option>
           </select>
         </td>
         <td style="padding:6px 8px;text-align:center;"><input type="checkbox" id="fs-req-${i}" ${f.required?'checked':''}></td>
-        <td style="padding:6px 8px;text-align:center;"><input type="number" class="inp" id="fs-dec-${i}" value="${f.decimals||0}" min="0" max="4" style="width:56px;text-align:center;"></td>
+        <td style="padding:6px 8px;text-align:center;"><input type="number" class="inp" id="fs-dec-${i}" value="${f.type==='text'?0:(f.decimals||0)}" min="0" max="4" style="width:56px;text-align:center;" ${f.type==='text'?'disabled':''}></td>
         <td style="padding:6px 8px;text-align:center;"><input type="checkbox" id="fs-en-${i}" ${f.enabled?'checked':''}></td>
       </tr>`;
     }
@@ -867,7 +1254,7 @@ function saveFieldSettings() {
 
 function downloadCsvTemplate() {
   const schema = window.__fieldSchema || {};
-  const fixed = ['Item Code', 'Item Name', 'Image Name', 'Selling Price', 'Min Qty', 'Unit'];
+  const fixed = ['Item Code', 'Item Name', 'Image Name', 'Category'];
   const custom = [];
   for (let i = 1; i <= 13; i++) {
     const f = schema[`field${i}`];
@@ -1220,7 +1607,7 @@ function renderPublicCatalog(userId, slug) {
       }
       html += `
       <div class="pcard" id="pcard-${p.id}">
-        <div class="pph">📦</div>
+        <div class="pph">${p.imageUrl ? `<img src="${p.imageUrl}" style="width:100%;height:100%;object-fit:cover;">` : '📦'}</div>
         <div class="pbody">
           <div class="pname">${p.productName || p.itemNo}</div>
           <div class="pcode">${p.itemNo}</div>

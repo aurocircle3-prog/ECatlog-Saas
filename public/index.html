@@ -94,6 +94,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .card{background:#fff;border:1px solid #e8e8e8;border-radius:10px;padding:18px 20px;margin-bottom:16px;}
 .card-title{font-size:14px;font-weight:700;color:#111;margin-bottom:14px;}
 .tbl-wrap{overflow-x:auto;border-radius:10px;border:1px solid #e8e8e8;}
+.range-wrap{position:relative;padding-bottom:18px;}
+.range-wrap input[type=range]{width:100%;display:block;accent-color:#2e3192;}
 .tbl{width:100%;border-collapse:collapse;font-size:13px;background:#fff;white-space:nowrap;}
 .tbl th{text-align:left;font-weight:700;font-size:11px;color:#888;padding:10px 14px;border-bottom:1px solid #e8e8e8;text-transform:uppercase;letter-spacing:0.4px;background:#f9f9f9;}
 .tbl td{padding:11px 14px;border-bottom:1px solid #f0f0f0;color:#1a1a1a;vertical-align:middle;}
@@ -807,6 +809,8 @@ function uploadCsv(catId) {
 
 // ── WHOLESALER: ITEM MASTER ───────────────────────────────────────────────
 let __itemMasterData = [], __itemMasterSchema = {};
+let __imPageSize = 100;
+window.__imFilters = {};
 
 function loadItemMaster() {
   const el = document.getElementById('panel-w-items');
@@ -850,22 +854,57 @@ function renderItemMasterTable(items, schema, cats) {
 
   <div id="im-panel" style="margin-bottom:16px;"></div>
 
-  <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;">
+  <div style="margin-bottom:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
     <input class="inp" id="im-search" placeholder="Search by item code or name..." style="flex:1;max-width:380px;" oninput="filterItems(this.value)">
+    <button class="btn btn-outline btn-sm" onclick="toggleImFilters()" id="im-filters-btn">⚙ Filters</button>
     <span style="font-size:12px;color:#888;" id="im-count">${items.length} items</span>
+  </div>
+  <div id="im-filters-panel" style="display:none;background:#f8f9ff;border:1px solid #e0e4f0;border-radius:8px;padding:12px;margin-bottom:10px;">
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+      <div style="min-width:150px;">
+        <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Active</label>
+        <select class="inp" style="width:100%;" id="flt-active" onchange="applyImFilters()">
+          <option value="all">All</option><option value="yes">Yes</option><option value="no">No</option>
+        </select>
+      </div>
+      ${customCols.map(c => {
+        const isNum = c.type === 'number' || c.type === 'decimal';
+        if (isNum) {
+          const vals = items.map(p => parseFloat(p[c.key])||0).filter(v=>!isNaN(v));
+          const mn = vals.length ? Math.min(...vals) : 0;
+          const mx = vals.length ? Math.max(...vals) : 999999;
+          return `<div style="min-width:200px;"><label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">${c.name}</label>
+            <div class="range-wrap">
+              <input type="range" id="flt-${c.key}-min" min="${mn}" max="${mx}" value="${mn}" oninput="updateRangeDisplay('${c.key}',${mn},${mx});applyImFilters()">
+              <input type="range" id="flt-${c.key}-max" min="${mn}" max="${mx}" value="${mx}" oninput="updateRangeDisplay('${c.key}',${mn},${mx});applyImFilters()">
+              <div style="font-size:11px;color:#666;" id="flt-${c.key}-val">${mn} – ${mx}</div>
+            </div></div>`;
+        } else {
+          return `<div style="min-width:140px;"><label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;">${c.name}</label>
+            <input class="inp" style="width:100%;" id="flt-${c.key}-text" placeholder="contains..." oninput="applyImFilters()"></div>`;
+        }
+      }).join('')}
+      <button class="btn btn-outline btn-sm" onclick="clearImFilters()">Clear Filters</button>
+    </div>
+  </div>
+  <div style="margin-bottom:8px;display:flex;gap:6px;align-items:center;font-size:12px;color:#555;">
+    <span>Show:</span>
+    <button class="btn btn-outline btn-sm" id="impg-100" onclick="setImPageSize(100)" style="padding:2px 8px;">100</button>
+    <button class="btn btn-outline btn-sm" id="impg-200" onclick="setImPageSize(200)" style="padding:2px 8px;">200</button>
+    <button class="btn btn-outline btn-sm" id="impg-ALL" onclick="setImPageSize('ALL')" style="padding:2px 8px;">ALL</button>
   </div>
 
   <div class="tbl-wrap">
     <table class="tbl" id="im-table">
       <thead><tr>
-        <th style="width:60px;">Image</th>
-        <th>Item Code</th><th>Name</th><th>Category</th><th>Price</th>
+        <th style="width:48px;">Image</th>
+        <th>Item Code</th><th>Name</th>
         ${customCols.map(c => `<th>${c.name}</th>`).join('')}
         <th style="width:70px;">Active</th>
-        <th style="width:100px;">Actions</th>
+        <th style="width:90px;">Actions</th>
       </tr></thead>
-      <tbody id="im-tbody">
-        ${renderImRows(items, customCols)}
+      <tbody id="im-tbody" style="font-size:13px;">
+        ${renderImRows(items.slice(0, __imPageSize === 'ALL' ? items.length : __imPageSize), customCols)}
       </tbody>
     </table>
   </div>`;
@@ -873,37 +912,117 @@ function renderItemMasterTable(items, schema, cats) {
 
 function renderImRows(items, customCols) {
   if (!items.length) return `<tr><td colspan="99" style="text-align:center;padding:40px;color:#bbb;">No items yet. Click "+ Add Item" or "Import CSV" to get started.</td></tr>`;
-  return items.map(p => {
+  return items.map((p, idx) => {
     const imgHtml = p.imageUrl
-      ? `<img src="${p.imageUrl}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #eee;">`
-      : `<div style="width:40px;height:40px;border-radius:6px;background:#f5f5f5;border:1px solid #eee;display:flex;align-items:center;justify-content:center;font-size:18px;color:#ddd;">📦</div>`;
+      ? `<img src="${p.imageUrl}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #eee;">`
+      : `<div style="width:44px;height:44px;border-radius:6px;background:#f0f0f0;border:1px solid #e0e0e0;display:flex;align-items:center;justify-content:center;font-size:18px;color:#aaa;">📷</div>`;
     const customTds = (customCols||[]).map(c => `<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;">${p[c.key]||'-'}</td>`).join('');
-    return `<tr id="imrow-${p.id}">
-      <td>${imgHtml}</td>
+    const zebra = idx % 2 === 1 ? 'background:#fafafa;' : '';
+    return `<tr id="imrow-${p.id}" style="${zebra}">
+      <td style="width:48px;">${imgHtml}</td>
       <td><b>${p.itemNo}</b></td>
       <td>${p.productName||'-'}</td>
-      <td>${p.category||'-'}</td>
-      <td>₹${p.salePrice||0}</td>
       ${customTds}
       <td><span class="badge ${p.active===false?'bg-red':'bg-green'}" style="cursor:pointer;" onclick="toggleActive('${p.id}',${p.active!==false})">${p.active===false?'No':'Yes'}</span></td>
-      <td><button class="btn-green-sm" onclick="openEditItem('${p.id}')">Edit</button> <button class="btn-danger-sm" onclick="deleteItem('${p.id}')">Del</button></td>
+      <td><button class="btn-green-sm" style="padding:2px 7px;font-size:11px;" onclick="openEditItem('${p.id}')">Edit</button> <button class="btn-danger-sm" style="padding:2px 7px;font-size:11px;" onclick="deleteItem('${p.id}')">Del</button></td>
     </tr>`;
   }).join('');
 }
 
 function filterItems(q) {
-  const items = q.trim()
-    ? __itemMasterData.filter(p => (p.itemNo||'').toLowerCase().includes(q.toLowerCase()) || (p.productName||'').toLowerCase().includes(q.toLowerCase()))
-    : __itemMasterData;
+  const query = (q !== undefined ? q : (document.getElementById('im-search')?.value || '')).trim().toLowerCase();
+  let items = query
+    ? __itemMasterData.filter(p => (p.itemNo||'').toLowerCase().includes(query) || (p.productName||'').toLowerCase().includes(query))
+    : [...__itemMasterData];
+
+  // Active filter
+  const activeSel = document.getElementById('flt-active')?.value || 'all';
+  if (activeSel === 'yes') items = items.filter(p => p.active !== false);
+  else if (activeSel === 'no') items = items.filter(p => p.active === false);
+
+  // Custom field filters
   const customCols = [];
   for (let i = 1; i <= 13; i++) {
     const f = __itemMasterSchema[`field${i}`];
     if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, ...f });
   }
+  for (const c of customCols) {
+    const isNum = c.type === 'number' || c.type === 'decimal';
+    if (isNum) {
+      const minEl = document.getElementById(`flt-${c.key}-min`);
+      const maxEl = document.getElementById(`flt-${c.key}-max`);
+      if (minEl && maxEl) {
+        const mn = parseFloat(minEl.value), mx = parseFloat(maxEl.value);
+        items = items.filter(p => { const v = parseFloat(p[c.key])||0; return v >= mn && v <= mx; });
+      }
+    } else {
+      const textEl = document.getElementById(`flt-${c.key}-text`);
+      if (textEl && textEl.value.trim()) {
+        const tv = textEl.value.trim().toLowerCase();
+        items = items.filter(p => (p[c.key]||'').toLowerCase().includes(tv));
+      }
+    }
+  }
+
+  const total = items.length;
+  const shown = __imPageSize === 'ALL' ? total : Math.min(__imPageSize, total);
+  const sliced = __imPageSize === 'ALL' ? items : items.slice(0, __imPageSize);
+
   const tb = document.getElementById('im-tbody');
   const cnt = document.getElementById('im-count');
-  if (tb) tb.innerHTML = renderImRows(items, customCols);
-  if (cnt) cnt.textContent = items.length + ' items';
+  if (tb) tb.innerHTML = renderImRows(sliced, customCols);
+  if (cnt) cnt.textContent = shown < total ? `Showing ${shown} of ${total} items` : `${total} items`;
+
+  // Highlight active page size button
+  ['100','200','ALL'].forEach(s => {
+    const btn = document.getElementById(`impg-${s}`);
+    if (btn) btn.style.fontWeight = String(__imPageSize) === s ? 'bold' : 'normal';
+  });
+}
+
+function setImPageSize(size) {
+  __imPageSize = size;
+  filterItems();
+}
+
+function toggleImFilters() {
+  const panel = document.getElementById('im-filters-panel');
+  if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function applyImFilters() { filterItems(); }
+
+function updateRangeDisplay(key, mn, mx) {
+  const minEl = document.getElementById(`flt-${key}-min`);
+  const maxEl = document.getElementById(`flt-${key}-max`);
+  const valEl = document.getElementById(`flt-${key}-val`);
+  if (minEl && maxEl && valEl) {
+    let lo = parseFloat(minEl.value), hi = parseFloat(maxEl.value);
+    if (lo > hi) { lo = hi; minEl.value = lo; }
+    valEl.textContent = `${lo} – ${hi}`;
+  }
+}
+
+function clearImFilters() {
+  const activeSel = document.getElementById('flt-active');
+  if (activeSel) activeSel.value = 'all';
+  for (let i = 1; i <= 13; i++) {
+    const f = __itemMasterSchema[`field${i}`];
+    if (!f || !f.enabled || !f.name) continue;
+    const key = `field${i}`;
+    const isNum = f.type === 'number' || f.type === 'decimal';
+    if (isNum) {
+      const minEl = document.getElementById(`flt-${key}-min`);
+      const maxEl = document.getElementById(`flt-${key}-max`);
+      if (minEl) { minEl.value = minEl.min; }
+      if (maxEl) { maxEl.value = maxEl.max; }
+      updateRangeDisplay(key, 0, 0);
+    } else {
+      const textEl = document.getElementById(`flt-${key}-text`);
+      if (textEl) textEl.value = '';
+    }
+  }
+  filterItems();
 }
 
 function showImAddItem() {
@@ -997,9 +1116,27 @@ function openEditItem(id) {
     }
     customHtml = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;">${pairs.join('')}</div>`;
   }
-  const imgPreview = p.imageUrl
-    ? `<img id="eim-img-preview" src="${p.imageUrl}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #eee;display:block;margin-bottom:8px;">`
-    : `<div id="eim-img-preview" style="width:80px;height:80px;border-radius:8px;background:#f5f5f5;border:1px solid #eee;display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:8px;">📦</div>`;
+  // Multi-image slots: slot 0 = Thumbnail, slots 1-4 = additional images
+  const imgSlots = [
+    { label: 'Thumbnail', key: 'imageUrl', slot: 0 },
+    { label: 'Image 1', key: 'image1Url', slot: 1 },
+    { label: 'Image 2', key: 'image2Url', slot: 2 },
+    { label: 'Image 3', key: 'image3Url', slot: 3 },
+    { label: 'Image 4', key: 'image4Url', slot: 4 },
+  ];
+  const imgSlotsHtml = imgSlots.map(s => {
+    const url = p[s.key];
+    const inner = url
+      ? `<div style="position:relative;display:inline-block;">
+           <img src="${url}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
+           <button onclick="deleteImgSlot('${p.id}',${s.slot})" style="position:absolute;top:-6px;right:-6px;background:#e53e3e;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:17px;">✕</button>
+         </div>`
+      : `<label style="display:flex;width:72px;height:72px;border:2px dashed #ccc;border-radius:6px;align-items:center;justify-content:center;font-size:28px;color:#bbb;cursor:pointer;">
+           +<input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage('${p.id}',${s.slot},this)">
+         </label>`;
+    return `<div style="text-align:center;"><div style="font-size:10px;color:#777;margin-bottom:4px;">${s.label}</div>${inner}</div>`;
+  }).join('');
+  const imgPreview = `<div id="eim-img-slots" style="display:flex;gap:8px;flex-wrap:wrap;">${imgSlotsHtml}</div>`;
 
   const panel = document.getElementById('im-panel');
   if (!panel) return;
@@ -1019,11 +1156,9 @@ function openEditItem(id) {
         ${customHtml}
       </div>
       <div style="flex-shrink:0;">
-        <div style="font-size:11px;font-weight:600;color:#555;margin-bottom:6px;">PRODUCT IMAGE</div>
+        <div style="font-size:11px;font-weight:600;color:#555;margin-bottom:8px;">PRODUCT IMAGES</div>
         ${imgPreview}
-        <input type="file" class="inp" id="eim-image-file" accept="image/*" style="font-size:11px;padding:6px;">
-        <button class="btn btn-outline btn-sm" style="margin-top:6px;width:100%;" onclick="uploadItemImage('${p.id}')">Upload Image</button>
-        <div id="eim-img-msg" style="font-size:11px;margin-top:4px;"></div>
+        <div id="eim-img-msg" style="font-size:11px;margin-top:6px;"></div>
       </div>
     </div>
     <div style="margin-top:16px;display:flex;gap:10px;">
@@ -1054,19 +1189,100 @@ function saveItemEdit(id) {
   }).catch(e => { msgEl.innerHTML = `<div class="err-msg" style="display:block;">${e.message}</div>`; });
 }
 
-function uploadItemImage(id) {
-  const f = document.getElementById('eim-image-file');
+function resizeImage(file, filename) {
+  return new Promise(resolve => {
+    const MAX = 1400, QUALITY = 0.82;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => {
+          resolve(new File([blob], filename + '.jpg', { type: 'image/jpeg' }));
+        }, 'image/jpeg', QUALITY);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadItemImage(id, slot, fileInput) {
+  const f = fileInput || document.getElementById('eim-image-file');
   if (!f || !f.files[0]) return;
-  const fd = new FormData(); fd.append('image', f.files[0]);
   const msgEl = document.getElementById('eim-img-msg');
-  msgEl.textContent = 'Uploading...';
+  if (msgEl) msgEl.textContent = 'Uploading...';
+  const resized = await resizeImage(f.files[0], `img-${id}-slot${slot||0}`);
+  const fd = new FormData();
+  fd.append('image', resized);
+  if (slot !== undefined && slot !== null) fd.append('slot', slot);
   api('POST', `/api/products/${id}/image`, fd, true).then(d => {
-    msgEl.innerHTML = '<span style="color:#16a34a;">✓ Uploaded!</span>';
-    const prev = document.getElementById('eim-img-preview');
-    if (prev) { prev.outerHTML = `<img id="eim-img-preview" src="${d.imageUrl}?t=${Date.now()}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #eee;display:block;margin-bottom:8px;">`; }
+    if (msgEl) msgEl.innerHTML = '<span style="color:#16a34a;">✓ Uploaded!</span>';
     const item = __itemMasterData.find(x => x.id === id);
-    if (item) item.imageUrl = d.imageUrl;
-  }).catch(e => { msgEl.innerHTML = `<span style="color:#c0392b;">${e.message}</span>`; });
+    if (item) {
+      if (!slot) item.imageUrl = d.imageUrl;
+      else item[`image${slot}Url`] = d.imageUrl;
+    }
+    // Refresh the slots display
+    const slotsEl = document.getElementById('eim-img-slots');
+    if (slotsEl && item) {
+      const imgSlots = [
+        { label: 'Thumbnail', key: 'imageUrl', slot: 0 },
+        { label: 'Image 1', key: 'image1Url', slot: 1 },
+        { label: 'Image 2', key: 'image2Url', slot: 2 },
+        { label: 'Image 3', key: 'image3Url', slot: 3 },
+        { label: 'Image 4', key: 'image4Url', slot: 4 },
+      ];
+      slotsEl.innerHTML = imgSlots.map(s => {
+        const url = item[s.key];
+        const inner = url
+          ? `<div style="position:relative;display:inline-block;">
+               <img src="${url}?t=${Date.now()}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
+               <button onclick="deleteImgSlot('${id}',${s.slot})" style="position:absolute;top:-6px;right:-6px;background:#e53e3e;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:17px;">✕</button>
+             </div>`
+          : `<label style="display:flex;width:72px;height:72px;border:2px dashed #ccc;border-radius:6px;align-items:center;justify-content:center;font-size:28px;color:#bbb;cursor:pointer;">
+               +<input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage('${id}',${s.slot},this)">
+             </label>`;
+        return `<div style="text-align:center;"><div style="font-size:10px;color:#777;margin-bottom:4px;">${s.label}</div>${inner}</div>`;
+      }).join('');
+    }
+  }).catch(e => { if (msgEl) msgEl.innerHTML = `<span style="color:#c0392b;">${e.message}</span>`; });
+}
+
+function deleteImgSlot(id, slot) {
+  const item = __itemMasterData.find(x => x.id === id);
+  if (!item) return;
+  if (slot === 0) { item.imageUrl = null; } else { item[`image${slot}Url`] = null; }
+  // Re-render slots
+  const slotsEl = document.getElementById('eim-img-slots');
+  if (slotsEl) {
+    const imgSlots = [
+      { label: 'Thumbnail', key: 'imageUrl', slot: 0 },
+      { label: 'Image 1', key: 'image1Url', slot: 1 },
+      { label: 'Image 2', key: 'image2Url', slot: 2 },
+      { label: 'Image 3', key: 'image3Url', slot: 3 },
+      { label: 'Image 4', key: 'image4Url', slot: 4 },
+    ];
+    slotsEl.innerHTML = imgSlots.map(s => {
+      const url = item[s.key];
+      const inner = url
+        ? `<div style="position:relative;display:inline-block;">
+             <img src="${url}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
+             <button onclick="deleteImgSlot('${id}',${s.slot})" style="position:absolute;top:-6px;right:-6px;background:#e53e3e;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:17px;">✕</button>
+           </div>`
+        : `<label style="display:flex;width:72px;height:72px;border:2px dashed #ccc;border-radius:6px;align-items:center;justify-content:center;font-size:28px;color:#bbb;cursor:pointer;">
+             +<input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage('${id}',${s.slot},this)">
+           </label>`;
+      return `<div style="text-align:center;"><div style="font-size:10px;color:#777;margin-bottom:4px;">${s.label}</div>${inner}</div>`;
+    }).join('');
+  }
 }
 
 function toggleActive(id, currentlyActive) {

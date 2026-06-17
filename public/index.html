@@ -2152,62 +2152,39 @@ function loadRItems() {
       if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, name: f.name });
     }
     let html = `
-    <div class="sec-hdr"><div><div class="sec-title">Wholesaler Items</div><div class="sec-sub">Select items and add them to your catalog with your margin</div></div></div>
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-title">Bulk Add Selected Items to Catalog</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;">
-        <div class="fgd"><label>Margin %</label><input class="inp inp-full" id="bulk-margin" placeholder="e.g. 30"></div>
-        <div class="fgd"><label>Discount % (displayed to customer)</label><input class="inp inp-full" id="bulk-discount" placeholder="e.g. 10"></div>
-        <div class="fgd"><label>Target Catalog</label><select class="inp inp-full" id="bulk-catalog"></select></div>
-        <button class="btn btn-dark btn-sm" onclick="bulkAdd()">Add Selected</button>
-      </div>
-      <div style="font-size:11px;color:#888;margin-top:6px;">
-        Final price = Wholesale × (1 + Margin%). Displayed MRP = Final ÷ (1 − Discount%) if discount &gt; 0.
-      </div>
+    <div class="sec-hdr">
+      <div><div class="sec-title">Wholesaler Items</div><div class="sec-sub">Browse all available items — go to My Catalogs to add items to a catalog</div></div>
+      <input class="inp" id="r-browse-search" placeholder="Search..." style="width:200px;" oninput="filterRBrowse()">
     </div>`;
     if (!items.length) {
       html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">Wholesaler has no items yet.</div>';
     } else {
-      html += `<div class="tbl-wrap"><table class="tbl"><thead><tr>
-        <th><input type="checkbox" id="chk-all" onchange="toggleAll(this.checked)"> All</th>
-        <th>Item Code</th><th>Name</th><th>Category</th><th>Selling Price</th><th>Min Qty</th><th>Unit</th>
+      html += `<div class="tbl-wrap"><table class="tbl" id="r-browse-tbl"><thead><tr>
+        <th>Image</th><th>Item Code</th><th>Name</th><th>WSP</th><th>Min Qty</th><th>Unit</th>
         ${customCols.map(c => `<th>${c.name}</th>`).join('')}
       </tr></thead><tbody>`;
       items.forEach(i => {
-        html += `<tr>
-          <td><input type="checkbox" class="item-chk" value="${i.id}"></td>
-          <td><b>${i.itemNo}</b></td><td>${i.productName||'-'}</td><td>${i.category||'-'}</td>
-          <td><b>₹${i.salePrice}</b></td><td>${i.minQty||1}</td><td>${i.unit||'-'}</td>
+        const imgHtml = i.imageUrl ? `<img src="${i.imageUrl}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;">` : '<div style="width:32px;height:32px;background:#f0f0f0;border-radius:4px;"></div>';
+        html += `<tr data-name="${(i.productName||'').toLowerCase()}" data-code="${(i.itemNo||'').toLowerCase()}">
+          <td>${imgHtml}</td>
+          <td><b>${i.itemNo||'-'}</b></td><td>${i.productName||'-'}</td>
+          <td><b>₹${i.salePrice||0}</b></td><td>${i.minQty||1}</td><td>${i.unit||'-'}</td>
           ${customCols.map(c => `<td>${i[c.key]||'-'}</td>`).join('')}
         </tr>`;
       });
       html += '</tbody></table></div>';
     }
     el.innerHTML = html;
-    api('GET', '/api/catalogs').then(cats => {
-      const sel = document.getElementById('bulk-catalog');
-      if (sel) sel.innerHTML = cats.length
-        ? cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('')
-        : '<option value="">No catalogs yet — create one first</option>';
-      window.__rCatalogs = cats;
-    });
+    window.__rBrowseItems = items;
   }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
 }
 
-function toggleAll(checked) {
-  document.querySelectorAll('.item-chk').forEach(c => c.checked = checked);
-}
-
-function bulkAdd() {
-  const ids = Array.from(document.querySelectorAll('.item-chk:checked')).map(c => c.value);
-  if (!ids.length) return toast('Select at least one item', true);
-  const catalogId = val('bulk-catalog');
-  if (!catalogId) return toast('Create a catalog first (My Catalogs tab)', true);
-  api('POST', '/api/reseller/catalog-items/bulk', {
-    catalogId, wholesalerProductIds: ids,
-    marginPct: val('bulk-margin'), discountPct: val('bulk-discount')
-  }).then(d => toast(`${d.count} items added to catalog!`))
-    .catch(e => toast(e.message, true));
+function filterRBrowse() {
+  const q = (document.getElementById('r-browse-search')?.value || '').toLowerCase();
+  document.querySelectorAll('#r-browse-tbl tbody tr').forEach(row => {
+    const match = !q || row.dataset.name?.includes(q) || row.dataset.code?.includes(q);
+    row.style.display = match ? '' : 'none';
+  });
 }
 
 function loadRCatalogs() {
@@ -2324,6 +2301,7 @@ function openRManageItems(catId, catName) {
     </div>
   </div>`;
   document.body.appendChild(overlay);
+  window.__rmiCurrentCatId = catId;
 
   // Load items and current catalog items together
   Promise.all([
@@ -2352,22 +2330,26 @@ function renderRMIItems() {
   if (countEl) countEl.textContent = `${items.length} item${items.length!==1?'s':''}`;
   let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#f5f5f5;">';
   html += '<th style="padding:8px;text-align:left;width:32px;"></th>';
-  html += '<th style="padding:8px;text-align:left;">Image</th>';
+  html += '<th style="padding:8px;text-align:left;width:44px;">Image</th>';
   html += '<th style="padding:8px;text-align:left;">Item Code</th>';
   html += '<th style="padding:8px;text-align:left;">Name</th>';
   html += '<th style="padding:8px;text-align:right;">WSP</th>';
-  html += '<th style="padding:8px;text-align:center;">In Catalog</th>';
+  html += '<th style="padding:8px;text-align:center;">Status</th>';
   html += '</tr></thead><tbody>';
   items.forEach(p => {
     const isIn = inCat.has(p.id);
-    const imgHtml = p.imageUrl ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;">` : '<div style="width:36px;height:36px;background:#f0f0f0;border-radius:4px;"></div>';
+    const imgHtml = p.imageUrl ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;">` : '<div style="width:36px;height:36px;background:#f0f0f0;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#ccc;">📷</div>';
     html += `<tr style="border-bottom:1px solid #f0f0f0;${isIn?'background:#f0fff4;':''}">
-      <td style="padding:6px 8px;"><input type="checkbox" class="rmi-chk" data-id="${p.id}" ${isIn?'checked disabled':''}></td>
+      <td style="padding:6px 8px;">${isIn ? '' : `<input type="checkbox" class="rmi-chk" data-id="${p.id}">`}</td>
       <td style="padding:6px 8px;">${imgHtml}</td>
       <td style="padding:6px 8px;font-weight:600;">${p.itemNo||'-'}</td>
       <td style="padding:6px 8px;">${p.productName||'-'}</td>
       <td style="padding:6px 8px;text-align:right;">${p.salePrice!==undefined && p.salePrice!=='' ? '₹'+Number(p.salePrice).toFixed(2) : '-'}</td>
-      <td style="padding:6px 8px;text-align:center;">${isIn ? '<span style="color:#27ae60;font-weight:700;">✓ Added</span>' : ''}</td>
+      <td style="padding:6px 8px;text-align:center;">
+        ${isIn
+          ? `<span style="color:#27ae60;font-weight:700;margin-right:6px;">✓ In catalog</span><button onclick="removeRMIItem('${window.__rmiCurrentCatId}','${p.id}')" style="font-size:11px;padding:2px 8px;border:1px solid #e74c3c;color:#e74c3c;background:none;border-radius:4px;cursor:pointer;">Remove</button>`
+          : ''}
+      </td>
     </tr>`;
   });
   html += '</tbody></table>';
@@ -2381,18 +2363,23 @@ function toggleAllRMI(checked) {
 }
 
 function addSelectedRMIItems(catId) {
-  const checked = Array.from(document.querySelectorAll('.rmi-chk:checked:not(:disabled)'));
+  const checked = Array.from(document.querySelectorAll('.rmi-chk:checked'));
   if (!checked.length) return toast('Select at least one item', true);
   const itemIds = checked.map(c => c.dataset.id);
-  api('POST', `/api/reseller/catalogs/${catId}/items`, { itemIds }).then(d => {
+  api('POST', `/api/reseller/catalogs/${catId}/items`, { itemIds }).then(() => {
     toast(`${itemIds.length} item(s) added to catalog`);
-    // Mark them as in-catalog
-    itemIds.forEach(id => {
-      window.__rmiCatItemIds = window.__rmiCatItemIds || new Set();
-      window.__rmiCatItemIds.add(id);
-    });
+    window.__rmiCatItemIds = window.__rmiCatItemIds || new Set();
+    itemIds.forEach(id => window.__rmiCatItemIds.add(id));
     renderRMIItems();
-    // Refresh catalog list in background
+    __loadedTabs['r-catalogs'] = false;
+  }).catch(e => toast(e.message, true));
+}
+
+function removeRMIItem(catId, itemId) {
+  api('DELETE', `/api/reseller/catalogs/${catId}/items/${itemId}`).then(() => {
+    toast('Item removed from catalog');
+    if (window.__rmiCatItemIds) window.__rmiCatItemIds.delete(itemId);
+    renderRMIItems();
     __loadedTabs['r-catalogs'] = false;
   }).catch(e => toast(e.message, true));
 }
@@ -2538,8 +2525,11 @@ function renderPublicCatalog(userId, slug) {
         <div class="pub-products-main">`;
 
     // Helper: get field value by key
+    // For reseller catalogs with margin/discount, use computed _sellingPrice/_mrp
     const fval = (p, key) => {
-      if (key === 'salePrice') return p.salePrice || 0;
+      if (key === 'salePrice') return p._sellingPrice !== undefined ? p._sellingPrice : (p.salePrice || 0);
+      if (key === '_sellingPrice') return p._sellingPrice || p.salePrice || 0;
+      if (key === '_mrp') return p._mrp || 0;
       if (key === 'minQty') return p.minQty || 1;
       if (key === 'unit') return p.unit || '';
       if (key === 'productName') return p.productName || '';
@@ -2549,18 +2539,27 @@ function renderPublicCatalog(userId, slug) {
       return v || '';
     };
     const fname = key => {
-      if (key === 'salePrice') return 'WSP';
+      if (key === 'salePrice' || key === '_sellingPrice') return 'Price';
+      if (key === '_mrp') return 'MRP';
       if (key === 'minQty') return 'Min Qty';
       if (key === 'unit') return 'Unit';
       const sc = schema[key]; return sc ? sc.name : key;
     };
+    // For reseller catalogs, auto-apply _sellingPrice/_mrp to price display
+    const isResellerCatalog = d.products.length > 0 && d.products[0]._sellingPrice !== undefined;
 
     html += `<div class="pgrid" id="pub-pgrid">`;
     d.products.forEach(p => {
-      // Price line
-      const mainPrice = belowImg.priceField ? fval(p, belowImg.priceField) : p.salePrice || 0;
-      const mrpPrice  = belowImg.mrpField   ? fval(p, belowImg.mrpField)   : 0;
-      const discPct   = belowImg.showDiscount && mrpPrice && mainPrice && Number(mrpPrice) > Number(mainPrice)
+      // Price line — for reseller catalogs use computed prices, else use display format
+      let mainPrice, mrpPrice;
+      if (isResellerCatalog) {
+        mainPrice = p._sellingPrice;
+        mrpPrice  = p._mrp !== p._sellingPrice ? p._mrp : 0;
+      } else {
+        mainPrice = belowImg.priceField ? fval(p, belowImg.priceField) : p.salePrice || 0;
+        mrpPrice  = belowImg.mrpField   ? fval(p, belowImg.mrpField)   : 0;
+      }
+      const discPct = belowImg.showDiscount && mrpPrice && mainPrice && Number(mrpPrice) > Number(mainPrice)
         ? Math.round((1 - Number(mainPrice) / Number(mrpPrice)) * 100) : 0;
 
       // Image overlay tags
@@ -2662,7 +2661,7 @@ function addToCart(pid) {
   const qty = parseInt(document.getElementById('qty-' + pid).textContent) || 1;
   const existing = __cart.find(c => c.pid === pid);
   if (existing) { existing.qty = qty; }
-  else { __cart.push({ pid, itemNo: p.itemNo, productName: p.productName || p.itemNo, qty, unit: p.unit, price: p.discPrice || p.salePrice }); }
+  else { __cart.push({ pid, itemNo: p.itemNo, productName: p.productName || p.itemNo, qty, unit: p.unit, price: p._sellingPrice || p.discPrice || p.salePrice }); }
   const btn = document.getElementById('atc-' + pid);
   if (btn) { btn.textContent = 'In Cart ✓'; btn.className = 'btn-incart'; }
   renderCartSidebar();

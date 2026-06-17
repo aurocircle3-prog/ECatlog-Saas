@@ -19,6 +19,20 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const imgUploader = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5*1024*1024 },
+  fileFilter: (_req, f, cb) => cb(null, /\.(jpg|jpeg|png|gif|webp)$/i.test(f.originalname)),
+});
+
+const csvUploader = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _f, cb) => { const d = path.join(__dirname,'uploads','csv'); fs.mkdirSync(d,{recursive:true}); cb(null,d); },
+    filename: (_req, file, cb) => cb(null, uuid()+'_'+file.originalname),
+  }),
+  limits: { fileSize: 10*1024*1024 },
+});
+
 // ── HELPERS ───────────────────────────────────────────────────────────────
 function slugify(s) {
   return String(s || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').substring(0, 60) || 'firm';
@@ -421,12 +435,6 @@ app.delete('/api/products/:id', auth, wholesalerOnly, async (req, res) => {
 });
 
 // ── IMAGE UPLOAD ──────────────────────────────────────────────────────────
-const imgUploader = multer({
-  storage: multer.memoryStorage(), // always buffer in memory; we decide where to save below
-  limits: { fileSize: 5*1024*1024 },
-  fileFilter: (_req, f, cb) => cb(null, /\.(jpg|jpeg|png|gif|webp)$/i.test(f.originalname)),
-});
-
 async function saveImage(productId, fileBuffer, originalName) {
   if (CLOUDINARY_URL) {
     // Upload to Cloudinary
@@ -464,14 +472,6 @@ app.post('/api/products/:id/image', auth, wholesalerOnly, imgUploader.single('im
 });
 
 // ── CSV/XLSX UPLOAD ───────────────────────────────────────────────────────
-const csvUploader = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _f, cb) => { const d = path.join(__dirname,'uploads','csv'); fs.mkdirSync(d,{recursive:true}); cb(null,d); },
-    filename: (_req, file, cb) => cb(null, uuid()+'_'+file.originalname),
-  }),
-  limits: { fileSize: 10*1024*1024 },
-});
-
 app.post('/api/catalogs/:catalogId/upload-csv', auth, wholesalerOnly, csvUploader.single('csv'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {

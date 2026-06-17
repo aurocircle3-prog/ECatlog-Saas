@@ -53,8 +53,10 @@ async function initMongoDB() {
   const mongoose = require('mongoose');
   await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
   console.log('Connected to MongoDB Atlas');
+  // NOTE: existing documents created before this fix have no `id` field — users will need to re-register
 
-  const anySchema = new mongoose.Schema({}, { strict: false, versionKey: false });
+  // id:false disables Mongoose's built-in virtual `id` getter so our uuid `id` field is stored as a real field
+  const anySchema = new mongoose.Schema({}, { strict: false, versionKey: false, id: false });
   const clean = doc => { if (!doc) return null; const o = doc.toObject ? doc.toObject() : {...doc}; delete o._id; return o; };
   const cleanArr = arr => arr.map(d => { const o = d.toObject ? d.toObject() : {...d}; delete o._id; return o; });
 

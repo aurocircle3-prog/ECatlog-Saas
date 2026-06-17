@@ -86,6 +86,20 @@ function genOrderNo(prefix) {
 }
 function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 
+function defaultFieldSchema() {
+  const schema = {};
+  for (let i = 1; i <= 13; i++) {
+    schema[`field${i}`] = {
+      name: i === 1 ? 'MRP' : '',
+      type: i === 1 ? 'number' : 'text',
+      required: false,
+      decimals: i === 1 ? 2 : 0,
+      enabled: i <= 10,
+    };
+  }
+  return schema;
+}
+
 function auth(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1] || req.query.token;
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -174,6 +188,26 @@ app.get('/api/wholesalers/by-slug/:slug', (req, res) => {
   res.json({ id: w.id, firmName: w.firmName, slug: w.slug });
 });
 
+// ── WHOLESALER: FIELD SCHEMA ──────────────────────────────────────────────
+app.get('/api/wholesaler/field-schema', auth, wholesalerOnly, (req, res) => {
+  const user = DB.findUser({ id: req.user.id });
+  res.json(user.fieldSchema || defaultFieldSchema());
+});
+
+app.put('/api/wholesaler/field-schema', auth, wholesalerOnly, (req, res) => {
+  const { schema } = req.body;
+  if (!schema || typeof schema !== 'object') return res.status(400).json({ error: 'schema object required' });
+  DB.updateUser({ id: req.user.id }, { fieldSchema: schema });
+  res.json({ ok: true });
+});
+
+// Public: resellers and catalog pages fetch the wholesaler's schema
+app.get('/api/field-schema/:wholesalerId', (req, res) => {
+  const user = DB.findUser({ id: req.params.wholesalerId });
+  if (!user) return res.status(404).json({ error: 'Not found' });
+  res.json(user.fieldSchema || defaultFieldSchema());
+});
+
 // ── WHOLESALER: CATALOGS ─────────────────────────────────────────────────
 app.get('/api/catalogs', auth, (req, res) => {
   if (req.user.role === 'wholesaler') return res.json(DB.findCatalogs({ ownerId: req.user.id }));
@@ -217,16 +251,20 @@ app.post('/api/catalogs/:catalogId/products', auth, wholesalerOnly, (req, res) =
   if (!cat) return res.status(404).json({ error: 'Catalog not found' });
   if (cat.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
   const { itemNo, productName, imageName, category, minQty, unit, salePrice,
-    description, description2, filter1, filter2, filter3, tag1, tag2 } = req.body;
+    description, description2 } = req.body;
   if (!itemNo || salePrice === undefined) return res.status(400).json({ error: 'itemNo and salePrice are required' });
+  const customFields = {};
+  for (let i = 1; i <= 13; i++) {
+    const k = `field${i}`;
+    customFields[k] = req.body[k] !== undefined ? req.body[k] : '';
+  }
   const p = {
     id: uuid(), catalogId: req.params.catalogId, ownerId: req.user.id,
     itemNo, productName: productName || itemNo, imageName: imageName || '',
     category: category || '', minQty: Number(minQty) || 1, unit: unit || 'Pcs',
     salePrice: Number(salePrice) || 0, discPrice: 0,
     description: description || '', description2: description2 || '',
-    filter1: filter1 || '', filter2: filter2 || '', filter3: filter3 || '',
-    tag1: tag1 || '', tag2: tag2 || '',
+    ...customFields,
     sourceWholesalerProductId: null,
     createdAt: new Date().toISOString(),
   };
@@ -298,27 +336,54 @@ app.post('/api/catalogs/:catalogId/upload-csv', auth, wholesalerOnly, csvUploade
       return '';
     };
 
+    const wholesalerUser = DB.findUser({ id: req.user.id });
+    const schema = wholesalerUser.fieldSchema || defaultFieldSchema();
+
     let inserted = [], errors = [];
     rows.forEach((row, idx) => {
       const rowNum = idx + 2, rowErrors = [];
-      const itemNo = col(row, 'itemno', 'item no', 'code', 'sku');
-      const sp = col(row, 'saleprice', 'sale price', 'saleamount', 'sale amount', 'price', 'mrp');
-      if (!itemNo) rowErrors.push('Item No is missing');
-      if (!sp || isNaN(parseFloat(sp))) rowErrors.push('Sale Price missing or invalid');
-      if (parseFloat(sp) < 0) rowErrors.push('Sale Price cannot be negative');
+      const itemNo = col(row, 'itemno', 'item no', 'item code', 'code', 'sku');
+      const sp = col(row, 'saleprice', 'sale price', 'selling price', 'sellingprice', 'price');
+      if (!itemNo) rowErrors.push('Item Code is missing');
+      if (!sp || isNaN(parseFloat(sp))) rowErrors.push('Selling Price missing or invalid');
+      if (parseFloat(sp) < 0) rowErrors.push('Selling Price cannot be negative');
+
+      // Validate mandatory custom fields
+      for (let i = 1; i <= 13; i++) {
+        const fd = schema[`field${i}`];
+        if (fd && fd.enabled && fd.name && fd.required) {
+          const v = col(row, fd.name);
+          if (!v) rowErrors.push(`${fd.name} is required`);
+        }
+      }
+
       if (rowErrors.length) { errors.push({ row: rowNum, itemNo: itemNo || '(blank)', errors: rowErrors }); return; }
+
+      // Map custom fields using schema names
+      const customFields = {};
+      for (let i = 1; i <= 13; i++) {
+        const k = `field${i}`;
+        const fd = schema[k];
+        if (fd && fd.enabled && fd.name) {
+          const raw = col(row, fd.name);
+          customFields[k] = fd.type === 'number' ? (parseFloat(raw) || 0) : raw;
+        } else {
+          customFields[k] = '';
+        }
+      }
+
       inserted.push({
         id: uuid(), catalogId: catId, ownerId: req.user.id,
-        itemNo, productName: col(row, 'productname', 'product name', 'name') || itemNo,
+        itemNo,
+        productName: col(row, 'productname', 'product name', 'item name', 'name') || itemNo,
         imageName: (col(row, 'imagename', 'image name', 'image', 'img') || itemNo).replace(/\s+/g, '-').trim(),
         category: col(row, 'category', 'cat'),
-        minQty: parseFloat(col(row, 'minqty', 'min qty', 'minimumqty', 'minium qty')) || 1,
+        minQty: parseFloat(col(row, 'minqty', 'min qty', 'minimumqty', 'minimum qty')) || 1,
         unit: col(row, 'unit') || 'Pcs',
         salePrice: parseFloat(sp), discPrice: 0,
         description: col(row, 'description', 'desc'),
         description2: col(row, 'description2', 'desc2'),
-        filter1: col(row, 'filter1', 'color', 'colour'), filter2: col(row, 'filter2', 'size'),
-        filter3: col(row, 'filter3', 'material'), tag1: col(row, 'tag1', 'tag 1'), tag2: col(row, 'tag2', 'tag 2'),
+        ...customFields,
         sourceWholesalerProductId: null,
         createdAt: new Date().toISOString(),
       });
@@ -369,7 +434,9 @@ app.get('/api/reseller/wholesaler-items', auth, resellerOnly, (req, res) => {
   const user = DB.findUser({ id: req.user.id });
   if (!user.wholesalerId) return res.status(400).json({ error: 'No wholesaler linked' });
   const items = DB.findProducts({ ownerId: user.wholesalerId });
-  res.json(items);
+  const wholesaler = DB.findUser({ id: user.wholesalerId });
+  const schema = wholesaler ? (wholesaler.fieldSchema || defaultFieldSchema()) : defaultFieldSchema();
+  res.json({ items, schema });
 });
 
 // ── RESELLER: BUILD CATALOG WITH MARGIN/DISCOUNT ─────────────────────────
@@ -393,13 +460,15 @@ app.post('/api/reseller/catalog-items', auth, approvedResellerOnly, (req, res) =
   if (wp.ownerId !== user.wholesalerId) return res.status(403).json({ error: 'Item does not belong to your linked wholesaler' });
 
   const { discPrice, salePrice } = computePrices(wp.salePrice, marginPct, discountPct);
+  const customFields = {};
+  for (let i = 1; i <= 13; i++) { const k = `field${i}`; customFields[k] = wp[k] || ''; }
   const p = {
     id: uuid(), catalogId, ownerId: req.user.id,
     itemNo: wp.itemNo, productName: wp.productName, imageName: wp.imageName,
     category: wp.category, minQty: wp.minQty, unit: wp.unit,
     salePrice, discPrice,
     description: wp.description, description2: wp.description2,
-    filter1: wp.filter1, filter2: wp.filter2, filter3: wp.filter3, tag1: wp.tag1, tag2: wp.tag2,
+    ...customFields,
     sourceWholesalerProductId: wp.id,
     marginPct: Number(marginPct) || 0, discountPct: Number(discountPct) || 0,
     createdAt: new Date().toISOString(),
@@ -422,13 +491,15 @@ app.post('/api/reseller/catalog-items/bulk', auth, approvedResellerOnly, (req, r
     const wp = DB.findProduct({ id: wpId });
     if (!wp || wp.ownerId !== user.wholesalerId) continue;
     const { discPrice, salePrice } = computePrices(wp.salePrice, marginPct, discountPct);
+    const customFields = {};
+    for (let i = 1; i <= 13; i++) { const k = `field${i}`; customFields[k] = wp[k] || ''; }
     const p = {
       id: uuid(), catalogId, ownerId: req.user.id,
       itemNo: wp.itemNo, productName: wp.productName, imageName: wp.imageName,
       category: wp.category, minQty: wp.minQty, unit: wp.unit,
       salePrice, discPrice,
       description: wp.description, description2: wp.description2,
-      filter1: wp.filter1, filter2: wp.filter2, filter3: wp.filter3, tag1: wp.tag1, tag2: wp.tag2,
+      ...customFields,
       sourceWholesalerProductId: wp.id,
       marginPct: Number(marginPct) || 0, discountPct: Number(discountPct) || 0,
       createdAt: new Date().toISOString(),
@@ -467,7 +538,16 @@ app.get('/api/public/:userId/:slug', (req, res) => {
   const cat = DB.findCatalog({ ownerId: owner.id, slug: req.params.slug });
   if (!cat) return res.status(404).json({ error: 'Catalog not found' });
   const products = DB.findProducts({ catalogId: cat.id });
-  res.json({ catalog: cat, owner: safeUser(owner), products });
+  // Get the wholesaler's schema (for reseller catalogs, look up the source wholesaler)
+  let schema = defaultFieldSchema();
+  const resellerUser = DB.findUser({ id: owner.id });
+  if (resellerUser && resellerUser.role === 'reseller' && resellerUser.wholesalerId) {
+    const wholesaler = DB.findUser({ id: resellerUser.wholesalerId });
+    if (wholesaler) schema = wholesaler.fieldSchema || defaultFieldSchema();
+  } else if (resellerUser && resellerUser.role === 'wholesaler') {
+    schema = resellerUser.fieldSchema || defaultFieldSchema();
+  }
+  res.json({ catalog: cat, owner: safeUser(owner), products, schema });
 });
 
 // ── ORDERS (public customer orders against reseller catalogs) ───────────

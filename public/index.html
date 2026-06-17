@@ -938,10 +938,6 @@ function showImAddItem() {
       <div class="fgd"><label>Item Name</label><input class="inp inp-full" id="im-add-productName" placeholder="Product name"></div>
     </div>
     <div class="frow">
-      <div class="fgd"><label>Category</label><input class="inp inp-full" id="im-add-category" placeholder="Category"></div>
-      <div class="fgd"><label>Selling Price</label><input class="inp inp-full" id="im-add-salePrice" type="number" placeholder="0.00"></div>
-    </div>
-    <div class="frow">
       <div class="fgd"><label>Image</label><input type="file" class="inp inp-full" id="im-add-image" accept="image/*"></div>
       <div class="fgd"><label>Active</label><select class="inp inp-full" id="im-add-active"><option value="true" selected>Yes</option><option value="false">No</option></select></div>
     </div>
@@ -960,8 +956,6 @@ function submitAddItem() {
   const schema = __itemMasterSchema;
   const body = {
     itemNo, productName: document.getElementById('im-add-productName')?.value||'',
-    category: document.getElementById('im-add-category')?.value||'',
-    salePrice: document.getElementById('im-add-salePrice')?.value||0,
     active: document.getElementById('im-add-active')?.value !== 'false',
   };
   for (let i = 1; i <= 13; i++) {
@@ -1021,10 +1015,6 @@ function openEditItem(id) {
           <div class="fgd"><label>Item Code *</label><input class="inp inp-full" id="eim-itemNo" value="${p.itemNo}"></div>
           <div class="fgd"><label>Item Name</label><input class="inp inp-full" id="eim-productName" value="${p.productName||''}"></div>
         </div>
-        <div class="frow">
-          <div class="fgd"><label>Category</label><input class="inp inp-full" id="eim-category" value="${p.category||''}"></div>
-          <div class="fgd"><label>Selling Price</label><input class="inp inp-full" id="eim-salePrice" type="number" value="${p.salePrice||0}"></div>
-        </div>
         <div class="fgd"><label>Active</label><select class="inp" id="eim-active" style="width:160px;"><option value="true" ${p.active!==false?'selected':''}>Yes</option><option value="false" ${p.active===false?'selected':''}>No</option></select></div>
         ${customHtml}
       </div>
@@ -1050,8 +1040,6 @@ function saveItemEdit(id) {
   const body = {
     itemNo: document.getElementById('eim-itemNo')?.value?.trim(),
     productName: document.getElementById('eim-productName')?.value||'',
-    category: document.getElementById('eim-category')?.value||'',
-    salePrice: document.getElementById('eim-salePrice')?.value||0,
     active: document.getElementById('eim-active')?.value !== 'false',
   };
   if (!body.itemNo) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code required.</div>'; return Promise.resolve(); }

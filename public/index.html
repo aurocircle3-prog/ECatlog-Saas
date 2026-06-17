@@ -860,6 +860,11 @@ function renderItemMasterTable(items, schema, cats) {
     <button class="btn btn-outline btn-sm" onclick="toggleImFilters()" id="im-filters-btn">⚙ Filters</button>
     <span style="font-size:12px;color:#888;" id="im-count">${items.length} items</span>
   </div>
+  <div id="im-selection-bar" style="display:none;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:8px 12px;margin-bottom:8px;display:none;align-items:center;gap:12px;font-size:13px;">
+    <span id="im-sel-count" style="color:#3730a3;font-weight:600;"></span>
+    <button class="btn btn-outline btn-sm" onclick="downloadSelectedCsv()">⬇ Download Selected CSV</button>
+    <button class="btn btn-outline btn-sm" onclick="clearImSelection()">✕ Clear selection</button>
+  </div>
   <div id="im-filters-panel" style="display:none;background:#f8f9ff;border:1px solid #e0e4f0;border-radius:8px;padding:12px;margin-bottom:10px;">
     <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
       <div style="min-width:150px;">
@@ -896,6 +901,7 @@ function renderItemMasterTable(items, schema, cats) {
   <div class="tbl-wrap">
     <table class="tbl" id="im-table">
       <thead><tr>
+        <th style="width:32px;"><input type="checkbox" id="im-chk-all" onchange="toggleAllImChecks(this.checked)" title="Select all"></th>
         <th style="width:90px;">Actions</th>
         <th style="width:48px;">Image</th>
         <th>Item Code</th><th>Name</th>
@@ -918,6 +924,7 @@ function renderImRows(items, customCols) {
     const customTds = (customCols||[]).map(c => `<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;">${p[c.key]||'-'}</td>`).join('');
     const zebra = idx % 2 === 1 ? 'background:#fafafa;' : '';
     return `<tr id="imrow-${p.id}" style="${zebra}">
+      <td><input type="checkbox" class="im-row-chk" data-id="${p.id}" onchange="onImCheckChange()"></td>
       <td style="width:48px;">${imgHtml}</td>
       <td><b>${p.itemNo}</b></td>
       <td>${p.productName||'-'}</td>
@@ -976,6 +983,58 @@ function filterItems(q) {
     const btn = document.getElementById(`impg-${s}`);
     if (btn) btn.style.fontWeight = String(__imPageSize) === s ? 'bold' : 'normal';
   });
+}
+
+function toggleAllImChecks(checked) {
+  document.querySelectorAll('.im-row-chk').forEach(c => c.checked = checked);
+  onImCheckChange();
+}
+
+function onImCheckChange() {
+  const checked = document.querySelectorAll('.im-row-chk:checked');
+  const bar = document.getElementById('im-selection-bar');
+  const countEl = document.getElementById('im-sel-count');
+  if (!bar) return;
+  if (checked.length > 0) {
+    bar.style.display = 'flex';
+    countEl.textContent = `${checked.length} item(s) selected`;
+  } else {
+    bar.style.display = 'none';
+  }
+  const allChk = document.getElementById('im-chk-all');
+  if (allChk) {
+    const all = document.querySelectorAll('.im-row-chk');
+    allChk.indeterminate = checked.length > 0 && checked.length < all.length;
+    allChk.checked = all.length > 0 && checked.length === all.length;
+  }
+}
+
+function clearImSelection() {
+  document.querySelectorAll('.im-row-chk').forEach(c => c.checked = false);
+  const allChk = document.getElementById('im-chk-all');
+  if (allChk) { allChk.checked = false; allChk.indeterminate = false; }
+  onImCheckChange();
+}
+
+function downloadSelectedCsv() {
+  const checked = Array.from(document.querySelectorAll('.im-row-chk:checked'));
+  if (!checked.length) { toast('No items selected', true); return; }
+  const ids = new Set(checked.map(c => c.dataset.id));
+  const items = __itemMasterData.filter(p => ids.has(p.id));
+  const customCols = [];
+  for (let i = 1; i <= 13; i++) {
+    const f = __itemMasterSchema[`field${i}`];
+    if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, name: f.name });
+  }
+  const headers = ['Item Code', 'Item Name', ...customCols.map(c => c.name), 'Active'];
+  const rows = items.map(p => [
+    p.itemNo, p.productName||'',
+    ...customCols.map(c => p[c.key]||''),
+    p.active === false ? 'No' : 'Yes'
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `selected-items-${items.length}.csv`; a.click();
 }
 
 function setImPageSize(size) {
@@ -1526,9 +1585,10 @@ function showImBulkEdit() {
     </div>
     <div style="background:#fff3cd;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#7a5b00;">
       <b>How it works:</b><br>
-      1. Click "Download Current CSV" to get all your items.<br>
-      2. Edit the CSV in Excel/Sheets — <b>keep Item Code unchanged</b>, modify other columns.<br>
-      3. Upload the edited file below — only matching item codes will be updated.
+      1. Use checkboxes in the item table to select items, then click <b>Download Selected CSV</b> — or download all items below.<br>
+      2. Edit in Excel/Sheets — <b>keep Item Code unchanged</b>, modify the columns you want.<br>
+      3. <b>You can have as few as 2 columns</b> — Item Code + the one field to update (e.g. just "Item Code" + "Melting").<br>
+      4. Upload the edited file — only present columns are updated, everything else is left untouched.
     </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;">
       <button class="btn btn-outline btn-sm" onclick="downloadItemsCsv()">⬇ Download Current CSV</button>

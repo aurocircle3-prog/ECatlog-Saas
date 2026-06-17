@@ -134,84 +134,335 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .toast.err{background:#8a1a1a;}
 
 /* ── PUBLIC CATALOG ── */
-.pub-page{min-height:100vh;background:#f8f8f8;}
-.pub-brand-bar{background:#fff;border-bottom:1px solid #e8e8e8;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:64px;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
-.pub-brand-left{display:flex;align-items:center;gap:12px;}
-.pub-logo-initial{width:44px;height:44px;border-radius:8px;background:#2e3192;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;flex-shrink:0;}
-.pub-firm-name{font-size:16px;font-weight:800;color:#111;}
-.pub-banner{background:linear-gradient(135deg,#2e3192 0%,#1a1f7a 60%,#3d42b0 100%);color:#fff;padding:28px 28px 22px;}
-.pub-cat-title{font-size:22px;font-weight:800;margin-bottom:4px;}
+/* ── CATALOG REDESIGN ──────────────────── */
+.pub-page{min-height:100vh;background:#f8f8f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+/* Top brand bar */
+.pub-brand-bar{background:#fff;border-bottom:1px solid #e8e8e8;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:68px;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+.pub-brand-left{display:flex;align-items:center;gap:14px;}
+.pub-logo-img{height:46px;max-width:120px;border-radius:8px;object-fit:contain;object-position:left center;border:1px solid #e8e8e8;background:#fff;padding:2px;}
+.pub-logo-initial{width:46px;height:46px;border-radius:8px;background:#2e3192;color:#ffffff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;flex-shrink:0;}
+.pub-firm-name{font-size:17px;font-weight:800;color:#111111;line-height:1.2;}
+.pub-firm-tagline{font-size:11px;color:#888;margin-top:2px;}
+.pub-brand-right{display:flex;align-items:center;gap:10px;}
+/* Catalog banner */
+.pub-banner{background:linear-gradient(135deg,#2e3192 0%,#1a1f7a 60%,#3d42b0 100%);color:#ffffff;padding:28px 28px 22px;margin-bottom:0;}
+.pub-cat-title{font-size:22px;font-weight:800;letter-spacing:0.2px;margin-bottom:4px;}
 .pub-cat-sub{font-size:12px;opacity:0.7;}
+.pub-cat-pills{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+.pub-cat-pill{font-size:11px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);border-radius:20px;padding:4px 12px;color:#ffffff;}
+/* Filter section */
+.pub-filter-section{background:#fff;border-bottom:1px solid #e8e8e8;padding:8px 20px;position:sticky;top:68px;z-index:90;}
+/* Products layout */
 .pub-body{max-width:1200px;margin:0 auto;padding:20px 16px;}
 .pub-products-layout{display:flex;gap:20px;align-items:flex-start;}
 .pub-products-main{flex:1;min-width:0;}
-.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;}
-.pcard{background:#fff;border:1px solid #e8e8e8;border-radius:10px;overflow:hidden;transition:all 0.2s;}
-.pcard:hover{border-color:#2e3192;box-shadow:0 4px 12px rgba(46,49,146,0.1);}
+/* Product grid - 3 col on desktop */
+/* Product card */
+.pcard{background:#fff;border:1px solid #e8e8e8;border-radius:12px;overflow:hidden;transition:all 0.2s;cursor:default;}
+.pcard:hover{border-color:#2e3192;box-shadow:0 4px 16px rgba(46,49,146,0.1);transform:translateY(-2px);}
 .pcard.hidden{display:none;}
-.pph{width:100%;aspect-ratio:1;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:36px;color:#ddd;}
+/* 3:4 image ratio */
+.pimg-wrap{position:relative;width:100%;aspect-ratio:3/4;overflow:hidden;background:#f5f5f5;}
+.pimg-wrap img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;transition:opacity 0.35s;}
+.pimg-main{opacity:1;}.pimg-alt{opacity:0;}
+.pimg-wrap:hover .pimg-main{opacity:0;}
+.pimg-wrap:hover .pimg-alt{opacity:1;}
+.pph{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#ccc;font-size:36px;background:#f5f5f5;}
+.pcat-badge{position:absolute;top:8px;left:8px;background:rgba(26,18,8,0.78);color:#ffffff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;backdrop-filter:blur(4px);}
 .pbody{padding:12px 14px 14px;}
-.pname{font-size:13px;font-weight:800;color:#111;line-height:1.3;}
-.pcode{font-size:10px;color:#bbb;margin-top:1px;}
-.pmeta{font-size:11px;color:#888;margin-top:4px;}
-.price-row{display:flex;align-items:baseline;gap:6px;margin:8px 0 6px;flex-wrap:wrap;}
-.pnow{font-size:15px;font-weight:800;color:#2e3192;}
-.pwas{font-size:11px;color:#bbb;text-decoration:line-through;}
+.pname{font-size:13px;font-weight:800;color:#111111;line-height:1.3;margin-bottom:2px;}
+.pcode{font-size:10px;color:#bbb;letter-spacing:0.3px;}
+.pmeta{font-size:10px;color:#999;margin-top:5px;line-height:1.6;}
+.pdesc{font-size:11px;color:#555;margin-top:7px;line-height:1.6;padding-top:7px;border-top:1px solid #f0f0f0;}
+.pdesc2{font-size:10px;color:#999;margin-top:3px;line-height:1.5;font-style:italic;}
+.ptags{display:flex;gap:4px;margin-top:7px;flex-wrap:wrap;}
+.ptag{font-size:10px;padding:2px 7px;border-radius:10px;background:#f0f4ff;color:#2e3192;border:1px solid #c5caf0;font-weight:600;}
+.price-row{display:flex;align-items:baseline;gap:6px;margin:9px 0 4px;flex-wrap:wrap;}
+.pnow{font-size:15px;font-weight:800;color:#111111;}
+.pwas{font-size:11px;color:#ccc;text-decoration:line-through;}
+.punit{font-size:10px;color:#aaa;}
 .pdisc{font-size:10px;background:#e8f5ec;color:#16a34a;padding:2px 6px;border-radius:4px;font-weight:700;}
-.pminord{font-size:11px;color:#aaa;margin-bottom:8px;}
-.qty-cart-row{display:flex;gap:8px;align-items:center;}
-.qctrl{display:flex;align-items:center;border:1px solid #ddd;border-radius:7px;overflow:hidden;}
-.qbtn{width:30px;height:32px;background:#f8f6f0;border:none;cursor:pointer;font-size:16px;color:#444;display:flex;align-items:center;justify-content:center;}
-.qbtn:hover{background:#ede8de;}
-.qval{min-width:28px;text-align:center;font-size:13px;font-weight:700;}
-.btn-atc{flex:1;height:32px;background:#fff;color:#2e3192;border:1.5px solid #2e3192;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;}
+.pminord{font-size:10px;color:#aaa;margin-bottom:8px;}
+/* Cart button */
+.btn-atc{width:100%;height:34px;background:#ffffff;color:#2e3192;border:1.5px solid #2e3192;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.2px;transition:all 0.15s;}
+.btn-info{width:34px;height:34px;flex-shrink:0;background:#f5f5f5;border:1px solid #ddd;border-radius:7px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#888;transition:all 0.15s;padding:0;}
+.btn-info:hover,.btn-info.open{background:#f0f4ff;color:#2e3192;border-color:#2e3192;}
 .btn-atc:hover{background:#2e3192;color:#fff;}
-.btn-incart{flex:1;height:32px;background:#e8f5ec;color:#16a34a;border:1.5px solid #7ccca0;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;}
-/* Cart sidebar */
-.cart-sidebar{width:272px;flex-shrink:0;}
-.cart-box{background:#fff;border:1px solid #e8e8e8;border-radius:10px;overflow:hidden;position:sticky;top:80px;}
-.cart-hdr{background:#2e3192;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;}
-.cart-htitle{font-size:14px;font-weight:800;}
-.cart-cnt{background:rgba(255,255,255,0.2);color:#fff;font-size:11px;font-weight:700;border-radius:20px;padding:2px 9px;}
-.cart-body{padding:12px 14px;max-height:380px;overflow-y:auto;}
-.cart-empty{text-align:center;padding:28px 12px;color:#bbb;font-size:13px;}
-.citem{padding:9px 0;border-bottom:1px solid #f0f0f0;}
-.citem:last-child{border-bottom:none;}
-.citem-name{font-size:12px;font-weight:700;color:#111;}
-.citem-sub{font-size:11px;color:#999;}
-.cart-ftr{padding:14px 16px;border-top:1px solid #e8e8e8;background:#f9f9f9;}
-.total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
-.total-label{font-size:13px;color:#666;}
-.total-val{font-size:18px;font-weight:800;color:#111;}
-.btn-place{width:100%;background:#2e3192;color:#fff;border:none;border-radius:8px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;}
-.btn-place:hover{background:#1a1f7a;}
-/* Order modal */
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;overflow-y:auto;padding:30px 16px;}
-.overlay.open{display:flex;align-items:flex-start;justify-content:center;}
-.omodal{background:#fff;border-radius:14px;width:100%;max-width:520px;overflow:hidden;}
-.omodal-hdr{background:#2e3192;color:#fff;padding:18px 22px;}
-.omodal-body{padding:20px 22px;}
-.omodal-ftr{display:flex;gap:10px;margin-top:10px;}
-.btn-confirm{flex:1;background:#2e3192;color:#fff;border:none;border-radius:8px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;}
-.btn-confirm:hover{background:#1a1f7a;}
-.btn-ocancel{background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px 16px;font-size:13px;cursor:pointer;color:#555;}
+.btn-incart{width:100%;height:34px;background:#e8f5ec;color:#16a34a;border:1.5px solid #7ccca0;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;}
+.qty-cart-wrap{display:flex;flex-direction:column;gap:6px;}
+.qty-cart-row{display:flex;gap:7px;align-items:center;}
+.qctrl{display:flex;align-items:center;border:1px solid #ddd;border-radius:7px;overflow:hidden;}
+.qbtn{width:28px;height:30px;background:#f8f6f0;border:none;cursor:pointer;font-size:15px;color:#444;display:flex;align-items:center;justify-content:center;}
+.qbtn:hover{background:#ede8de;}
+.qval{min-width:26px;text-align:center;font-size:12px;font-weight:700;}
+/* Catalog footer */
+.pub-footer{background:#ffffff;color:#2e3192;margin-top:40px;padding:30px 0 20px;border-top:1px solid #e8e8e8;}
+.pub-footer-inner{max-width:1200px;margin:0 auto;padding:0 24px;}
+.pub-footer-top{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;padding-bottom:24px;border-bottom:1px solid #e8e8e8;}
+.pub-footer-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#2e3192;margin-bottom:10px;}
+.pub-footer-text{font-size:13px;color:#555;line-height:1.7;}
+.pub-footer-social{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;}
+.pub-social-btn{width:32px;height:32px;border-radius:8px;background:#f0f2ff;border:1px solid #d8dcf5;display:flex;align-items:center;justify-content:center;text-decoration:none;color:#2e3192;font-size:13px;transition:background 0.15s;}
+.pub-social-btn:hover{background:#dde0f7;}
+.pub-social-btn svg{width:15px;height:15px;}
+.pub-footer-bottom{padding-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+.pub-footer-copy{font-size:11px;color:#888;}
+/* WhatsApp float button */
+.mob-filter-pills{display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;padding:4px 0;margin-top:6px;scrollbar-width:none;}
+.mob-filter-pills::-webkit-scrollbar{display:none;}
+.mob-pill{display:inline-block;padding:5px 14px;margin-right:6px;border-radius:20px;border:1px solid #ddd;font-size:12px;cursor:pointer;background:#fff;color:#444;white-space:nowrap;transition:all 0.15s;}
+.mob-pill.active{background:#111111;color:#ffffff;border-color:#111111;}
+.wa-float{position:fixed;bottom:24px;right:24px;z-index:999;display:none;}
+.wa-float.show{display:block;}
+.wa-float-btn{width:56px;height:56px;border-radius:50%;background:#25D366;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(37,211,102,0.4);transition:transform 0.2s;text-decoration:none;}
+.wa-float-btn:hover{transform:scale(1.08);}
+.wa-float-btn svg{width:28px;height:28px;fill:#fff;}
+.wa-float-tooltip{position:absolute;right:64px;top:50%;transform:translateY(-50%);background:#111111;color:#ffffff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;white-space:nowrap;pointer-events:none;}
+.wa-float-tooltip::after{content:'';position:absolute;right:-6px;top:50%;transform:translateY(-50%);border:6px solid transparent;border-right:none;border-left-color:#111111;}
+/* No results */
+.no-results{text-align:center;padding:48px 20px;color:#aaa;display:none;}
+.no-results.show{display:block;}
+/* Filter box */
+.filter-box{background:transparent;border:none;padding:14px 0;margin-bottom:0;}
+.pub-filter-inner{background:#fff;border-radius:10px;border:1px solid #e8e8e8;padding:12px 16px;margin-bottom:14px;}
+.filter-sel{border:1px solid #e0d8cc;border-radius:7px;padding:7px 10px;font-size:12px;font-family:inherit;color:#1a1a1a;background:#fff;outline:none;cursor:pointer;width:100%;}
+/* ═══ MOBILE CATALOG 700px — Final ═══ */
+@media only screen and (max-width:700px){
+  .pub-brand-bar{height:auto !important;min-height:52px !important;padding:8px 12px !important;position:sticky !important;top:0 !important;z-index:100 !important;}
+  .pub-logo-img{height:36px !important;max-width:100px !important;width:auto !important;}
+  .pub-logo-initial{width:36px !important;height:36px !important;font-size:14px !important;}
+  .pub-firm-name{font-size:14px !important;}
+  .pub-brand-right .nav-btn{display:none !important;}
+  .pub-banner{display:none !important;}
+
+  /* Filter bar: single row — search + filter button + clear */
+  .pub-filter-section{position:sticky !important;top:52px !important;z-index:90 !important;padding:8px 10px !important;box-shadow:0 2px 6px rgba(0,0,0,0.07) !important;}
+  .mob-filter-main-row{display:flex !important;gap:8px !important;align-items:center !important;}
+  .mob-desktop-filters{display:none !important;}
+  .mob-filter-btn-wrap{display:flex !important;gap:6px !important;}
+  .results-info{font-size:10px !important;margin-top:4px !important;}
+  .filter-tags{margin-top:5px !important;}
+
+  /* Products */
+  .pub-body{padding:0 !important;padding-bottom:80px !important;}
+  .pub-products-layout{flex-direction:column !important;gap:0 !important;}
+  .cart-sidebar{display:none !important;width:0 !important;overflow:hidden !important;flex:none !important;}
+
+  .pcard{display:block !important;background:#fff !important;border:none !important;border-radius:0 !important;margin:0 !important;transform:none !important;box-shadow:none !important;width:100% !important;}
+  .pcard:hover{transform:none !important;box-shadow:none !important;}
+  .pimg-wrap{width:100% !important;aspect-ratio:1/1 !important;border-radius:0 !important;}
+  .pbody{padding:8px 8px 10px !important;}
+  .pname{font-size:12px !important;font-weight:700 !important;line-height:1.3 !important;}
+  .pcode{display:none !important;}
+  .ptag{font-size:10px !important;}
+  .price-row{margin:4px 0 2px !important;}
+  .pnow{font-size:13px !important;font-weight:800 !important;}
+  .pminord{font-size:10px !important;margin-bottom:6px !important;color:#aaa !important;}
+  .qty-cart-wrap{margin-top:4px !important;}
+  .btn-atc,.btn-incart{height:34px !important;font-size:11px !important;border-radius:7px !important;}
+  .wa-float{bottom:84px !important;right:16px !important;}
+  .wa-float-tooltip{display:none !important;}
+  .pub-footer{padding:20px 0 !important;margin-top:20px !important;}
+  .pub-footer-top{grid-template-columns:1fr !important;gap:14px !important;}
+}
+.filter-sel:focus{border-color:#2e3192;}
+/* Mobile filter bottom sheet */
+.mob-filter-sheet{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;z-index:500;border-radius:18px 18px 0 0;padding:20px 16px 32px;box-shadow:0 -4px 24px rgba(0,0,0,0.13);max-height:80vh;overflow-y:auto;}
+.mob-filter-sheet.open{display:block;}
+.mob-sheet-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:499;}
+.mob-sheet-overlay.open{display:block;}
+.mob-sheet-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.mob-sheet-title{font-size:15px;font-weight:800;color:#111111;}
+.mob-sheet-close{background:none;border:none;font-size:20px;cursor:pointer;color:#888;padding:4px;}
+.mob-sheet-group{margin-bottom:14px;}
+.mob-sheet-label{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:block;}
+.mob-sheet-sel{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;color:#111111;background:#fff;outline:none;}
+.mob-sheet-sel:focus{border-color:#2e3192;}
+.mob-sheet-apply{width:100%;padding:12px;background:#111111;color:#ffffff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px;}
+.mob-desktop-filters{display:flex;gap:8px;flex:3;min-width:0;}
+.mob-filter-btn-wrap{display:none;}
+.mob-filter-main-row{display:none;}
+.logo-upload-area{border:2px dashed #ddd;border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all 0.2s;}
+.logo-upload-area:hover{border-color:#2e3192;background:#f9f9f9;}
+.logo-preview{width:80px;height:80px;border-radius:10px;object-fit:cover;border:2px solid #e8e8e8;margin-bottom:8px;}
+@media(max-width:900px){
+  .pub-footer-top{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:600px){
+  .pub-brand-bar{height:56px;padding:0 14px;}
+  .pub-logo-img{height:32px !important;max-width:90px !important;width:auto !important;}
+  .pub-logo-initial{width:32px;height:32px;font-size:14px;}
+  .pub-firm-name{font-size:14px;}
+  .pub-footer-top{grid-template-columns:1fr;}
+  .wa-float{bottom:16px;right:16px;}
+}
 
 /* ── MOBILE ── */
-@media(max-width:768px){
-  .dash-layout{flex-direction:column;}
-  .sidebar{width:100%;flex-direction:row;padding:0;border-right:none;border-top:2px solid #e8e8e8;position:fixed;bottom:0;left:0;right:0;background:#fff;z-index:999;height:58px;box-shadow:0 -2px 10px rgba(0,0,0,0.1);overflow-x:auto;display:flex;min-height:unset;}
-  .sitem{flex-direction:column;gap:2px;padding:5px 8px;font-size:9px;border-left:none;border-top:3px solid transparent;flex:1;justify-content:center;align-items:center;min-width:55px;text-align:center;white-space:nowrap;}
-  .sitem.on{border-left:none;border-top-color:#2e3192;background:#f0f4ff;color:#2e3192;}
-  .dash-body{padding:12px;padding-bottom:70px;}
-  .metrics{grid-template-columns:1fr 1fr;}
-  .frow{grid-template-columns:1fr;}
-  .pgrid{grid-template-columns:1fr 1fr;}
-  .pub-products-layout{flex-direction:column;}
-  .cart-sidebar{width:100%;order:2;}
-  .cart-box{position:static;}
+
+/* ── MOBILE FILTER SHEET GROUPS ── */
+.mob-fgroup{margin-bottom:14px;}
+.mob-flabel{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;}
+.mob-fsel{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;outline:none;}
+.mob-fsel:focus{border-color:#2e3192;}
+
+/* ── FILTER BAR NEW ── */
+.fbar-inner{max-width:1400px;margin:0 auto;}
+.fbar-row{display:flex;gap:8px;align-items:center;}
+.fbar-desktops{display:flex;gap:6px;align-items:center;flex:1;}
+.fbar-mobiles{display:none;gap:6px;align-items:center;}
+.fbar-clr-btn{flex-shrink:0;background:none;border:1px solid #ddd;border-radius:7px;padding:6px 10px;cursor:pointer;color:#888;font-size:12px;white-space:nowrap;}
+.fbar-mob-btn{display:flex;align-items:center;gap:5px;padding:0 12px;height:36px;border:1px solid #ddd;border-radius:8px;background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:#333;white-space:nowrap;}
+.fbar-mob-btn:hover{border-color:#2e3192;color:#2e3192;}
+.view-tog{display:flex;gap:2px;background:#f0f0f0;border-radius:8px;padding:2px;}
+.vt-btn{width:30px;height:30px;border:none;background:none;border-radius:6px;cursor:pointer;color:#888;font-size:14px;display:flex;align-items:center;justify-content:center;}
+.vt-btn.active{background:#fff;color:#111111;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+.cat-pills-wrap{overflow-x:auto;scrollbar-width:none;margin-top:8px;-webkit-overflow-scrolling:touch;}
+.cat-pills-wrap::-webkit-scrollbar{display:none;}
+.cat-pills{display:flex;gap:6px;width:max-content;}
+.cat-pill{padding:5px 14px;border-radius:20px;border:1px solid #e0d9d0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#555;white-space:nowrap;transition:all 0.15s;}
+.cat-pill.active{background:#111111;color:#ffffff;border-color:#111111;}
+.ftags-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;}
+
+/* ── PRODUCT GRID ── */
+.pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+.pgrid-2{grid-template-columns:repeat(2,1fr) !important;}
+.pgrid-1{grid-template-columns:1fr !important;}
+@media(max-width:1100px){.pgrid{grid-template-columns:repeat(3,1fr);gap:12px;}}
+@media(max-width:900px){.pgrid{grid-template-columns:repeat(2,1fr);gap:10px;}}
+/* pub-layout */
+.pub-layout{display:flex;gap:20px;align-items:flex-start;}
+.pub-main{flex:1;min-width:0;}
+.pub-cart-side{width:280px;flex-shrink:0;position:sticky;top:130px;}
+
+/* ── PCARD NEW ── */
+.pcard{background:#fff;border:1px solid #e8e8e8;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;transition:box-shadow 0.2s;cursor:default;}
+.pcard:hover{box-shadow:0 4px 16px rgba(0,0,0,0.08);}
+.pcard-img{position:relative;width:100%;aspect-ratio:3/4;overflow:hidden;background:#f5f5f5;flex-shrink:0;cursor:zoom-in;}
+.pcard-img img{width:100%;height:100%;object-fit:cover;transition:transform 0.3s;}
+.pcard-img:hover img{transform:scale(1.04);}
+.pcard-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:40px;color:#ccc;}
+.pcard-body{padding:10px 12px 4px;flex:1;}
+.pcard-badge{position:absolute;top:6px;left:6px;background:#e53935;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;z-index:1;}
+.pcard-incart{position:absolute;top:6px;right:6px;background:#2e7d32;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;z-index:1;}
+.pcard-tagov{position:absolute;bottom:5px;right:5px;display:flex;flex-direction:column;align-items:flex-end;gap:2px;z-index:1;}
+.pcard-tagov-item{background:rgba(26,18,8,0.72);color:#ffffff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;backdrop-filter:blur(3px);white-space:nowrap;max-width:100px;overflow:hidden;text-overflow:ellipsis;}
+.pcard-icode{font-size:12px;color:#111111;font-weight:700;letter-spacing:0.3px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pcard-name{font-size:12px;font-weight:800;color:#111111;line-height:1.35;margin-bottom:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.pcard-price{font-size:14px;font-weight:800;color:#111111;line-height:1.2;}
+.pcard-was{font-size:10px;color:#aaa;text-decoration:line-through;margin-left:4px;font-weight:400;}
+.pcard-off{font-size:9px;color:#e53935;font-weight:700;margin-left:3px;background:#ffeaea;padding:1px 4px;border-radius:3px;}
+.pcard-min{font-size:10px;color:#888;margin-top:4px;}
+.pcard-det-btn{width:100%;background:none;border:none;border-top:1px solid #f0ebe0;padding:6px 12px;font-size:10px;font-weight:700;color:#888;cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;}
+.pcard-det-btn:hover{background:#fdfaf5;color:#2e3192;}
+.pcard-expand{display:none;padding:8px 12px 4px;border-top:1px solid #f0ebe0;background:#fdfbf7;}
+.pcard-expand.open{display:block;}
+.pcard-exp-row{display:flex;gap:5px;flex-wrap:wrap;margin:4px 0 6px;}
+.pcard-exp-chip{background:#fff;border:1px solid #e8e8e8;border-radius:6px;padding:3px 8px;font-size:10px;color:#555;}
+.pcard-exp-chip b{display:block;font-size:9px;color:#aaa;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;}
+.pcard-exp-tag{background:#f0f4ff;color:#2e3192;border:1px solid #c5caf0;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;}
+.pcard-exp-desc{font-size:11px;color:#666;line-height:1.65;margin-top:5px;white-space:pre-wrap;background:#f5f5f5;border-radius:6px;padding:7px 9px;}
+.pcard-foot{padding:6px 10px 10px;}
+.pcard-atc{width:100%;padding:8px;background:#ffffff;color:#2e3192;border:1.5px solid #2e3192;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;transition:all 0.15s;text-align:center;letter-spacing:0.2px;}
+.pcard-atc:hover{background:#2e3192;color:#fff;}
+.pcard-atc.on{background:#2e7d32 !important;color:#fff !important;border-color:#2e7d32 !important;}
+.pcard-img img,.pcard-img .pcard-ph,.pcard-badge,.pcard-incart{pointer-events:none;}
+.pcard-body *{pointer-events:none;}
+.pcard-atc{pointer-events:auto !important;}
+
+/* ── MOBILE FAB CART ── */
+.mob-cart-fab{display:none;position:fixed;bottom:20px;right:16px;z-index:990;width:54px;height:54px;border-radius:50%;background:#111111;color:#ffffff;font-size:22px;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,0.35);cursor:pointer;border:none;}
+.mob-cart-cnt{position:absolute;top:-4px;right:-4px;background:#2e3192;color:#fff;border-radius:10px;padding:2px 6px;font-size:10px;font-weight:800;border:2px solid #fff;min-width:18px;text-align:center;}
+.mob-ol{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9990;}
+.mob-ol.open{display:block;}
+.mob-drawer{display:flex;flex-direction:column;position:fixed;bottom:0;left:0;right:0;background:#fff;z-index:9991;border-radius:18px 18px 0 0;box-shadow:0 -4px 32px rgba(0,0,0,0.18);transform:translateY(100%);transition:transform 0.3s ease;max-height:80vh;}
+.mob-drawer.open{transform:translateY(0);}
+.mob-drawer-hdr{display:flex;justify-content:space-between;align-items:center;padding:16px 16px 12px;border-bottom:1px solid #f0f0f0;flex-shrink:0;}
+.mob-drawer-ftr{padding:14px 16px;border-top:1px solid #e8e8e8;background:#f9f9f9;flex-shrink:0;}
+
+/* ── PRODUCT DETAIL MODAL ── */
+.pdm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1100;}
+.pdm-overlay.open{display:block;}
+.pdm-sheet{position:fixed;left:0;right:0;bottom:0;z-index:1101;background:#fff;border-radius:22px 22px 0 0;max-height:94vh;display:flex;flex-direction:column;transform:translateY(100%);transition:transform 0.32s cubic-bezier(.25,.46,.45,.94);box-shadow:0 -8px 40px rgba(0,0,0,0.18);}
+.pdm-sheet.open{transform:translateY(0);}
+.pdm-handle{width:42px;height:4px;background:#ddd;border-radius:2px;margin:10px auto 0;flex-shrink:0;}
+.pdm-img-wrap{position:relative;width:100%;flex-shrink:0;background:#f5f5f5;overflow:hidden;aspect-ratio:1/1;}
+.pdm-img-track{position:absolute;inset:0;}
+.pdm-img-slide{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity 0.25s;}
+.pdm-arr{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.85);border:none;border-radius:50%;width:38px;height:38px;font-size:24px;cursor:pointer;z-index:2;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.18);color:#111111;}
+.pdm-arr-l{left:10px;}.pdm-arr-r{right:10px;}
+.pdm-dots{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:2;}
+.pdm-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.5);transition:all 0.2s;}
+.pdm-dot.on{background:#fff;transform:scale(1.3);}
+.pdm-close{position:absolute;top:10px;right:10px;background:rgba(26,18,8,0.65);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:3;line-height:1;}
+.pdm-summary{padding:12px 16px 0;flex-shrink:0;}
+.pdm-name{font-size:16px;font-weight:800;color:#111111;line-height:1.35;margin-bottom:2px;}
+.pdm-code{font-size:11px;color:#bbb;margin-bottom:8px;}
+.pdm-price-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:2px;}
+.pdm-price{font-size:22px;font-weight:800;color:#111111;}
+.pdm-was{font-size:13px;color:#bbb;text-decoration:line-through;}
+.pdm-off{font-size:11px;font-weight:800;color:#fff;background:#e53935;padding:2px 7px;border-radius:4px;}
+.pdm-toggle{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#f8f8f8;border:none;width:100%;text-align:left;cursor:pointer;font-size:13px;font-weight:700;color:#111111;border-top:1px solid #e8e8e8;flex-shrink:0;}
+.pdm-toggle-arr{font-size:16px;transition:transform 0.2s;color:#888;}
+.pdm-toggle.open .pdm-toggle-arr{transform:rotate(180deg);}
+.pdm-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 16px 0;display:none;}
+.pdm-body.open{display:block;}
+.pdm-attr-row{display:flex;gap:6px;flex-wrap:wrap;}
+.pdm-attr{background:#fff;border:1px solid #e8e8e8;border-radius:7px;padding:5px 12px;font-size:12px;color:#444;}
+.pdm-attr b{display:block;font-size:10px;color:#aaa;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:1px;}
+.pdm-tags{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px;}
+.pdm-tag{font-size:11px;padding:3px 10px;border-radius:20px;background:#f0f4ff;color:#2e3192;border:1px solid #c5caf0;font-weight:700;}
+.pdm-sec-hdr{font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:0.6px;margin:10px 0 5px;}
+.pdm-desc{font-size:13px;color:#555;line-height:1.8;background:#f8f8f8;border-radius:8px;padding:10px 12px;white-space:pre-wrap;margin-bottom:10px;}
+.pdm-footer{position:sticky;bottom:0;background:#fff;border-top:1px solid #e8e8e8;padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;box-shadow:0 -2px 10px rgba(0,0,0,0.06);flex-shrink:0;}
+.pdm-qty{display:flex;align-items:center;border:2px solid #111111;border-radius:9px;overflow:hidden;flex-shrink:0;}
+.pdm-qty-btn{width:38px;height:44px;border:none;background:#f5f5f5;color:#111111;font-size:22px;cursor:pointer;font-weight:700;}
+.pdm-qty-val{min-width:40px;text-align:center;font-weight:800;font-size:15px;color:#111111;}
+.pdm-atc{flex:1;height:44px;background:#ffffff;color:#2e3192;border:2px solid #2e3192;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer;}
+.pdm-atc.on{background:#2e7d32;color:#fff;}
+@media(min-width:600px){
+  .pdm-sheet{left:50%;right:auto;transform:translateX(-50%) translateY(100%);width:480px;border-radius:16px 16px 0 0;}
+  .pdm-sheet.open{transform:translateX(-50%) translateY(0);}
 }
-@media(max-width:480px){
-  .pgrid{grid-template-columns:1fr;}
+
+/* ── LIGHTBOX ── */
+.pd-lightbox{display:none;position:fixed;inset:0;background:#000;z-index:9999;align-items:center;justify-content:center;}
+.pd-lightbox.open{display:flex;}
+.pd-lightbox-img{width:100vw;height:100vh;object-fit:contain;display:block;user-select:none;}
+.pd-lightbox-close{position:fixed;top:14px;right:14px;background:rgba(255,255,255,0.18);border:none;color:#fff;font-size:20px;width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;}
+.pd-lightbox-prev,.pd-lightbox-next{position:fixed;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:36px;width:50px;height:50px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;}
+.pd-lightbox-prev{left:12px;}.pd-lightbox-next{right:12px;}
+.pd-lb-counter{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;font-weight:600;background:rgba(0,0,0,0.45);padding:4px 12px;border-radius:20px;}
+
+/* ── ORDER MODAL ── */
+.osum{background:#f9f9f9;border-radius:8px;border:1px solid #e8e8e8;padding:10px 12px;margin-bottom:14px;max-height:160px;overflow-y:auto;}
+.ototal-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0 14px;border-bottom:1px solid #ede8de;margin-bottom:14px;}
+.omodal-ftr{display:flex;gap:10px;margin-top:10px;}
+.btn-confirm{flex:1;background:#2e3192;color:#fff;border:none;border-radius:8px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;}
+.btn-confirm:hover{background:#333;}
+.btn-ocancel{background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px 16px;font-size:13px;cursor:pointer;color:#555;}
+
+/* ── MOBILE OVERRIDES ── */
+@media(max-width:768px){
+  .pub-filter-section{top:52px !important;padding:8px 12px !important;}
+  .fbar-desktops{display:none !important;}
+  .fbar-mobiles{display:flex !important;}
+  .pub-body{padding:0 0 80px !important;max-width:100% !important;}
+  .pub-layout{flex-direction:column !important;}
+  .pub-cart-side{display:none !important;}
+  .pgrid-2{grid-template-columns:1fr 1fr !important;}
+  .pgrid-1{grid-template-columns:1fr !important;background:transparent !important;gap:8px !important;padding:8px !important;}
+  .pcard{border-radius:0 !important;border:none !important;box-shadow:none !important;transform:none !important;}
+  .pgrid-1 .pcard{border-radius:10px !important;border:1px solid #e8e8e8 !important;}
+  .pcard:hover{transform:none !important;box-shadow:none !important;}
+  .pcard-body{padding:7px 8px 3px !important;}
+  .pcard-name{font-size:11px !important;}
+  .pcard-price{font-size:12px !important;}
+  .pcard-foot{padding:5px 8px 8px !important;}
+  .pcard-atc{font-size:10px !important;padding:6px !important;}
+}
+@media(max-width:400px){
+  .pgrid-2{grid-template-columns:1fr 1fr !important;}
+  .pcard-name{font-size:10px !important;}
 }
 </style>
 </head>
@@ -291,35 +542,212 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- ── PUBLIC CATALOG PAGE ── -->
 <div id="page-catalog" class="page pub-page">
-  <div id="pub-catalog-inner"></div>
-</div>
 
-<!-- Order form overlay -->
-<div class="overlay" id="order-overlay">
-  <div class="omodal">
-    <div class="omodal-hdr">
-      <div style="font-size:15px;font-weight:800;">Place Order</div>
-      <div style="font-size:12px;opacity:0.7;margin-top:2px;">Fill in your details below</div>
+  <!-- HEADER -->
+  <div class="pub-brand-bar">
+    <div class="pub-brand-left">
+      <div id="pub-logo-wrap"></div>
+      <div>
+        <div class="pub-firm-name" id="pub-firm">Loading...</div>
+        <div id="pub-cat-tag" style="display:flex;align-items:center;gap:6px;">
+          <span id="pub-cat-title" style="font-size:11px;color:#888;"></span>
+          <span id="pub-sub" style="font-size:10px;color:#2e3192;"></span>
+        </div>
+      </div>
     </div>
-    <div class="omodal-body">
-      <div id="order-summary" style="background:#f9f9f9;border:1px solid #e8e8e8;border-radius:8px;padding:10px 12px;margin-bottom:14px;max-height:160px;overflow-y:auto;font-size:12px;color:#555;"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0 14px;border-bottom:1px solid #ede8de;margin-bottom:14px;">
-        <span style="font-size:13px;color:#666;">Total</span>
-        <span style="font-size:18px;font-weight:800;color:#111;" id="order-total-display"></span>
+    <div class="pub-brand-right">
+      <button class="nav-btn" id="pub-back-btn" onclick="showPage('page-dash');render();" style="display:none;background:#f5f5f5;border:1px solid #ddd;color:#444;font-size:12px;">← Dashboard</button>
+    </div>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div class="pub-filter-section">
+    <div class="fbar-inner">
+      <div class="fbar-row">
+        <div class="search-wrap" style="flex:1;">
+          <input class="search-inp" id="search-inp" placeholder="🔍 Search..." oninput="applyFilters()">
+          <button class="search-clr" id="search-clr" onclick="clearSearch()" style="display:none;">✕</button>
+        </div>
+        <div class="fbar-desktops">
+          <select class="filter-sel" id="f-cat" onchange="applyFilters()"></select>
+          <select class="filter-sel" id="f-f1" onchange="applyFilters()"></select>
+          <select class="filter-sel" id="f-f2" onchange="applyFilters()"></select>
+          <button onclick="clearAllFilters()" class="fbar-clr-btn">✕ Clear</button>
+        </div>
+        <div class="fbar-mobiles">
+          <button onclick="openMobFilterSheet()" class="fbar-mob-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Filter<span id="mob-filter-count" style="display:none;background:#2e3192;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px;"></span>
+          </button>
+          <div class="view-tog">
+            <button id="vt-2" onclick="setView(2)" class="vt-btn active">⊞</button>
+            <button id="vt-1" onclick="setView(1)" class="vt-btn">☰</button>
+          </div>
+        </div>
       </div>
-      <div class="fgd"><label>Your Name *</label><input class="inp inp-full" id="o-name" placeholder="Full name"></div>
-      <div class="frow">
-        <div class="fgd"><label>Phone *</label><input class="inp inp-full" id="o-phone" placeholder="+91 ..."></div>
-        <div class="fgd"><label>Email</label><input class="inp inp-full" id="o-email" placeholder="optional"></div>
+      <div class="ftags-row" id="ftags-row" style="display:none;">
+        <div class="filter-tags" id="filter-tags"></div>
+        <button onclick="clearAllFilters()" style="background:none;border:none;color:#2e3192;font-size:12px;font-weight:600;cursor:pointer;">Clear all</button>
       </div>
-      <div class="fgd"><label>Delivery Address *</label><textarea class="inp inp-full" id="o-address" placeholder="Full address" style="min-height:70px;resize:vertical;"></textarea></div>
-      <div id="o-err" class="err-msg"></div>
-      <div class="omodal-ftr">
-        <button class="btn-ocancel" onclick="closeOrderModal()">Cancel</button>
-        <button class="btn-confirm" onclick="submitOrder()">Confirm Order</button>
+      <div class="results-info" id="results-info" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- PRODUCTS + CART -->
+  <div class="pub-body">
+    <div class="pub-layout">
+      <div class="pub-main">
+        <div class="pgrid pgrid-2" id="pgrid"><div class="loading" style="grid-column:1/-1;"><div class="spinner"></div><br>Loading...</div></div>
+        <div id="pub-pagination" style="text-align:center;padding:8px 0;"></div>
+        <div class="no-results" id="no-results" style="display:none;text-align:center;padding:60px 20px;color:#888;">No products match your filters.<br><button class="btn btn-gold btn-sm" style="margin-top:12px;" onclick="clearAllFilters()">Clear filters</button></div>
+      </div>
+      <div class="pub-cart-side">
+        <div class="cart-box">
+          <div class="cart-hdr"><span class="cart-htitle">🛒 Your cart</span><span class="cart-cnt" id="cart-cnt">0</span></div>
+          <div class="cart-body" id="cart-body"><div class="cart-empty">No items yet.<br>Add products to start.</div></div>
+          <div class="cart-ftr">
+            <div class="total-row"><span class="total-label">Total</span><span class="total-val" id="cart-total">₹0</span></div>
+            <button class="btn-place" id="btn-place" onclick="openOrder()" disabled>Place order</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- FOOTER -->
+  <div class="pub-footer" id="pub-footer" style="display:none;">
+    <div class="pub-footer-inner">
+      <div id="pub-footer-msg" style="display:none;padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid #e8e8e8;"></div>
+      <div class="pub-footer-top" id="pub-footer-top"></div>
+      <div class="pub-footer-bottom">
+        <div class="pub-footer-copy" id="pub-footer-copy"></div>
+        <div style="font-size:11px;margin-top:4px;">Powered by <a href="/" style="color:#a8ad5c;text-decoration:none;font-weight:700;"><span style='color:#a8ad5c'>e</span>CATlog</a></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page-catalog -->
+
+<!-- ── ORDER MODAL ── -->
+<div class="overlay" id="overlay">
+  <div class="omodal">
+    <div class="omodal-hdr"><div style="font-size:16px;font-weight:800;">Place your order</div><div style="font-size:12px;opacity:0.7;margin-top:2px;">Review &amp; confirm details</div></div>
+    <div class="omodal-body">
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Order summary</div>
+      <div class="osum" id="osum"></div>
+      <div class="ototal-row"><span style="font-size:14px;color:#666;">Total</span><span style="font-size:18px;font-weight:800;color:#2e3192;" id="ototal">₹0</span></div>
+      <div class="frow">
+        <div class="fg"><label>Your name *</label><input id="o-name" placeholder="Full name"></div>
+        <div class="fg">
+          <label>WhatsApp number *</label>
+          <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;">
+            <select class="filter-sel" id="o-cc" style="padding:10px 8px;font-size:13px;border:1px solid #ddd;border-radius:8px;background:#fff;outline:none;cursor:pointer;width:100%;">
+              <option value="+91">🇮🇳 +91 India</option>
+              <option value="+1">🇺🇸 +1 USA</option>
+              <option value="+44">🇬🇧 +44 UK</option>
+              <option value="+971">🇦🇪 +971 UAE</option>
+              <option value="+65">🇸🇬 +65 SG</option>
+              <option value="+60">🇲🇾 +60 MY</option>
+              <option value="+61">🇦🇺 +61 AU</option>
+            </select>
+            <input id="o-phone" placeholder="WhatsApp number" type="tel" style="border:1px solid #ddd;border-radius:8px;padding:10px 13px;font-size:13px;font-family:inherit;outline:none;width:100%;">
+          </div>
+        </div>
+      </div>
+      <div class="fg"><label>Email <span class="opt">(optional)</span></label><input id="o-email" placeholder="your@email.com" type="email"></div>
+      <div class="fg"><label>Delivery address <span class="opt">(optional)</span></label><textarea id="o-addr" placeholder="Enter if delivery required..." style="min-height:58px;border:1px solid #ddd;border-radius:8px;padding:10px 13px;font-size:13px;font-family:inherit;outline:none;width:100%;resize:vertical;"></textarea></div>
+      <div class="fg"><label>Remark <span class="opt">(optional)</span></label><input id="o-remark" placeholder="Special instructions, colour preference..."></div>
+      <div class="err-msg" id="oerr" style="display:none;"></div>
+      <div class="omodal-ftr">
+        <button class="btn-confirm" onclick="submitOrder()">✓ Confirm &amp; send via WhatsApp</button>
+        <button class="btn-ocancel" onclick="closeOrder()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── PRODUCT DETAIL MODAL ── -->
+<div class="pdm-overlay" id="pdm-overlay" onclick="closePdModal()"></div>
+<div class="pdm-sheet" id="pdm-sheet">
+  <div class="pdm-handle"></div>
+  <div class="pdm-img-wrap" id="pdm-img-wrap">
+    <div class="pdm-img-track" id="pdm-img-track"></div>
+    <button class="pdm-arr pdm-arr-l" id="pdm-prev" onclick="pdmNav(-1)" style="display:none;">‹</button>
+    <button class="pdm-arr pdm-arr-r" id="pdm-next" onclick="pdmNav(1)" style="display:none;">›</button>
+    <div class="pdm-dots" id="pdm-dots"></div>
+    <button class="pdm-close" onclick="closePdModal()">✕</button>
+  </div>
+  <div class="pdm-summary">
+    <div class="pdm-name" id="pdm-name"></div>
+    <div class="pdm-code" id="pdm-code"></div>
+    <div class="pdm-price-row">
+      <span class="pdm-price" id="pdm-price"></span>
+      <span class="pdm-was" id="pdm-was" style="display:none;"></span>
+      <span class="pdm-off" id="pdm-off" style="display:none;"></span>
+    </div>
+  </div>
+  <button class="pdm-toggle" id="pdm-toggle" onclick="pdmToggleDetails()">
+    <span>Product details</span><span class="pdm-toggle-arr">▼</span>
+  </button>
+  <div class="pdm-body" id="pdm-body">
+    <div id="pdm-attrs" style="display:none;margin-bottom:12px;"></div>
+    <div class="pdm-tags" id="pdm-tags" style="display:none;"></div>
+    <div id="pdm-desc-wrap" style="display:none;">
+      <div class="pdm-sec-hdr">Description</div>
+      <div class="pdm-desc" id="pdm-desc"></div>
+    </div>
+    <div style="height:16px;"></div>
+  </div>
+  <div class="pdm-footer">
+    <div class="pdm-qty">
+      <button class="pdm-qty-btn" onclick="pdmQty(-1)">−</button>
+      <span class="pdm-qty-val" id="pdm-qty">1</span>
+      <button class="pdm-qty-btn" onclick="pdmQty(1)">+</button>
+    </div>
+    <button class="pdm-atc" id="pdm-atc" onclick="pdmCart()">🛒 Add to cart</button>
+  </div>
+</div>
+
+<!-- Mobile Cart FAB -->
+<div class="mob-cart-fab" id="mob-cart-fab" onclick="openMobCart()">🛒<span class="mob-cart-cnt" id="mob-cart-fab-cnt" style="display:none;"></span></div>
+<div class="mob-ol" id="mob-cart-ol" onclick="closeMobCart()"></div>
+<div class="mob-drawer" id="mob-cart-drawer">
+  <div class="mob-drawer-hdr">
+    <span style="font-weight:800;font-size:15px;color:#111111;">Your cart <span id="mob-cart-cnt-d" style="background:#2e3192;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;margin-left:4px;"></span></span>
+    <button onclick="closeMobCart()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;">✕</button>
+  </div>
+  <div id="mob-cart-body" style="flex:1;overflow-y:auto;padding:8px 0;max-height:55vh;"></div>
+  <div class="mob-drawer-ftr">
+    <div style="display:flex;justify-content:space-between;margin-bottom:12px;"><span style="font-weight:700;color:#111111;">Total</span><span id="mob-cart-total" style="font-weight:800;font-size:18px;color:#111111;">₹0</span></div>
+    <button id="mob-btn-place" onclick="openOrder();closeMobCart();" disabled style="width:100%;padding:13px;background:#111111;color:#ffffff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;opacity:0.4;">Place order</button>
+  </div>
+</div>
+
+<!-- WhatsApp Float -->
+<div class="wa-float" id="wa-float"><div class="wa-float-tooltip" id="wa-float-tooltip">Chat with us</div><a class="wa-float-btn" id="wa-float-link" href="#" target="_blank"><svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" fill="#fff"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.118.549 4.107 1.51 5.836L0 24l6.335-1.493A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.006-1.37l-.36-.214-3.73.879.937-3.63-.235-.374A9.79 9.79 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182c5.43 0 9.818 4.388 9.818 9.818 0 5.43-4.388 9.818-9.818 9.818z" fill="#fff"/></svg></a></div>
+
+<!-- Mobile Filter Sheet -->
+<div class="mob-ol" id="mob-sheet-overlay" onclick="closeMobFilterSheet()"></div>
+<div class="mob-filter-sheet" id="mob-filter-sheet">
+  <div class="mob-drawer-hdr"><span style="font-weight:800;font-size:15px;color:#111111;">Filter</span><button onclick="closeMobFilterSheet()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;">✕</button></div>
+  <div style="padding:8px 0;">
+    <div class="mob-fgroup"><div class="mob-flabel" id="mob-fl-cat">Category</div><select class="mob-fsel" id="mob-f-cat" onchange="syncFilter('f-cat','mob-f-cat')"><option value="">All</option></select></div>
+    <div class="mob-fgroup"><div class="mob-flabel" id="mob-fl-f1">Filter 1</div><select class="mob-fsel" id="mob-f-f1" onchange="syncFilter('f-f1','mob-f-f1')"><option value="">All</option></select></div>
+    <div class="mob-fgroup" id="mob-fgroup-f2" style="display:none;"><div class="mob-flabel" id="mob-fl-f2">Filter 2</div><select class="mob-fsel" id="mob-f-f2" onchange="syncFilter('f-f2','mob-f-f2')"><option value="">All</option></select></div>
+  </div>
+  <div style="display:flex;gap:8px;padding-bottom:8px;">
+    <button onclick="closeMobFilterSheet()" style="flex:1;padding:12px;background:#111111;color:#ffffff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">Apply</button>
+    <button onclick="clearAllFilters();closeMobFilterSheet();" style="padding:12px 16px;background:none;border:1px solid #ddd;border-radius:8px;color:#888;cursor:pointer;">Clear</button>
+  </div>
+</div>
+
+<!-- Image Lightbox -->
+<div class="pd-lightbox" id="pd-lightbox">
+  <img class="pd-lightbox-img" id="pd-lightbox-img" src="" alt="">
+  <button class="pd-lightbox-close" onclick="closePdLightbox()">✕</button>
+  <button class="pd-lightbox-prev" id="pd-lb-prev" onclick="pdLbNav(-1)" style="display:none;">‹</button>
+  <button class="pd-lightbox-next" id="pd-lb-next" onclick="pdLbNav(1)" style="display:none;">›</button>
+  <div class="pd-lb-counter" id="pd-lb-counter"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -328,7 +756,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 const API = '';
 let TOKEN = localStorage.getItem('wrs_token') || '';
 let USER = JSON.parse(localStorage.getItem('wrs_user') || 'null');
-let __cart = [], __pubProducts = [], __pubCatalogId = '';
+let __cart = [], __pubProducts = [], __pubCatalogId = ''; // legacy compat
+let cart = {}, qtys = {}, currentProducts = [], currentOwner = {}, currentCatalogId = null;
+function getCurrency() { const c=(currentOwner&&currentOwner.currency)||(USER&&USER.currency)||'₹'; return c==='INR'?'₹':c; }
 let __activeTabs = [], __loadedTabs = {};
 let __sessionId = 0; // incremented on every login/logout — stale API callbacks check this
 
@@ -389,13 +819,17 @@ function pathInfo() {
 }
 
 function showPage(id) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.page').forEach(p => { p.classList.remove('active'); p.style.display = 'none'; });
+  const el = document.getElementById(id);
+  if (el) { el.classList.add('active'); el.style.display = 'block'; }
+  if (id !== 'page-product') window.scrollTo(0, 0);
+  const fab = document.getElementById('mob-cart-fab');
+  if (fab) fab.style.display = id === 'page-catalog' ? 'flex' : 'none';
 }
 
 function render() {
   const info = pathInfo();
-  if (info.page === 'public-catalog') { showPage('page-catalog'); return renderPublicCatalog(info.userId, info.slug); }
+  if (info.page === 'public-catalog') { return loadPublicCatalog(info.userId, info.slug); }
   if (info.page === 'reseller-signup') { showPage('page-reseller-signup'); return renderResellerSignup(info.slug); }
   if (!TOKEN || !USER) { showPage('page-auth'); return renderLogin(); }
   showPage('page-dash');
@@ -2490,244 +2924,519 @@ function evalFormulaField(formula, item, schema) {
   } catch(e) { return null; }
 }
 
-function renderPublicCatalog(userId, slug) {
-  const el = document.getElementById('pub-catalog-inner');
-  el.innerHTML = '<div style="padding:60px;text-align:center;color:#888;">Loading catalog...</div>';
-  api('GET', `/api/public/${userId}/${slug}`).then(d => {
-    __pubProducts = d.products;
-    __cart = [];
-    __pubCatalogId = d.catalog.id;
-    window.__pubSchema = d.schema || {};
-    const df = d.displayFormat || {};
-    const schema = window.__pubSchema || {};
+// ── PUBLIC CATALOG ─────────────────────────────────────────────────────────
 
-    // New 3-zone display format
-    const imageTags = df.imageTags || [];
-    const belowImg = df.belowImage || { priceField: 'salePrice', mrpField: '', showDiscount: true, line3Field: 'minQty' };
-    const detailFields = df.details || [];
-    const showImages = df.showImages !== false;
+let allProducts = [], currentPage = 1, currentView = 2;
+let __pubFilterKeys = []; // [{key, label}] for up to 3 filter fields from schema
+let __pubSchema = {}, __pubDf = {};
 
-    const initial = (d.owner.firmName || '?')[0].toUpperCase();
-    let html = `
-    <div class="pub-brand-bar">
-      <div class="pub-brand-left">
-        <div class="pub-logo-initial">${initial}</div>
-        <div><div class="pub-firm-name">${d.owner.firmName}</div><div style="font-size:11px;color:#888;">eCATLOG Store</div></div>
-      </div>
-      <div style="font-size:11px;color:#888;">${d.products.length} products</div>
-    </div>
-    <div class="pub-banner">
-      <div class="pub-cat-title">${d.catalog.name}</div>
-      <div class="pub-cat-sub">Browse and order from ${d.owner.firmName}</div>
-    </div>
-    <div class="pub-body">
-      <div class="pub-products-layout">
-        <div class="pub-products-main">`;
+function getImages(p) {
+  return [p.imageUrl, p.image1Url, p.image2Url, p.image3Url, p.image4Url].filter(Boolean);
+}
 
-    // Helper: get field value by key
-    // For reseller catalogs with margin/discount, use computed _sellingPrice/_mrp
-    const fval = (p, key) => {
-      if (key === 'salePrice') return p._sellingPrice !== undefined ? p._sellingPrice : (p.salePrice || 0);
-      if (key === '_sellingPrice') return p._sellingPrice || p.salePrice || 0;
-      if (key === '_mrp') return p._mrp || 0;
-      if (key === 'minQty') return p.minQty || 1;
-      if (key === 'unit') return p.unit || '';
-      if (key === 'productName') return p.productName || '';
-      const sc = schema[key];
-      const v = p[key];
-      if (sc && sc.type === 'number' && sc.decimals) return v ? Number(v).toFixed(sc.decimals) : '';
-      return v || '';
-    };
-    const fname = key => {
-      if (key === 'salePrice' || key === '_sellingPrice') return 'Price';
-      if (key === '_mrp') return 'MRP';
-      if (key === 'minQty') return 'Min Qty';
-      if (key === 'unit') return 'Unit';
-      const sc = schema[key]; return sc ? sc.name : key;
-    };
-    // For reseller catalogs, auto-apply _sellingPrice/_mrp to price display
-    const isResellerCatalog = d.products.length > 0 && d.products[0]._sellingPrice !== undefined;
+function getPubPrice(p) {
+  if (p._sellingPrice !== undefined) return { price: p._sellingPrice, was: p._mrp && p._mrp !== p._sellingPrice ? p._mrp : 0 };
+  const df = __pubDf.belowImage || {};
+  const price = df.priceField ? (p[df.priceField] || p.salePrice || 0) : (p.discPrice || p.salePrice || 0);
+  const was = df.mrpField ? (p[df.mrpField] || 0) : (p.discPrice && p.salePrice && p.salePrice > p.discPrice ? p.salePrice : 0);
+  return { price, was };
+}
 
-    html += `<div class="pgrid" id="pub-pgrid">`;
-    d.products.forEach(p => {
-      // Price line — for reseller catalogs use computed prices, else use display format
-      let mainPrice, mrpPrice;
-      if (isResellerCatalog) {
-        mainPrice = p._sellingPrice;
-        mrpPrice  = p._mrp !== p._sellingPrice ? p._mrp : 0;
+async function loadPublicCatalog(userId, slug) {
+  showPage('page-catalog');
+  document.getElementById('pub-firm').textContent = 'Loading...';
+  document.getElementById('pgrid').innerHTML = '<div class="loading" style="grid-column:1/-1;"><div class="spinner"></div><br>Loading catalog...</div>';
+  const backBtn = document.getElementById('pub-back-btn');
+  if (backBtn) backBtn.style.display = TOKEN ? 'block' : 'none';
+  try {
+    const data = await fetch(`/api/public/${userId}/${slug}`).then(r => r.json());
+    if (data.error) throw new Error(data.error);
+    const { catalog, owner, products, schema, displayFormat } = data;
+    currentProducts = products;
+    currentOwner = owner;
+    currentCatalogId = catalog.id;
+    __pubSchema = schema || {};
+    __pubDf = displayFormat || {};
+    cart = {}; qtys = {};
+
+    // Brand bar
+    document.getElementById('pub-firm').textContent = owner.firmName;
+    const catTitleEl = document.getElementById('pub-cat-title');
+    if (catTitleEl) catTitleEl.textContent = catalog.name + ' ·';
+    const pubSubEl = document.getElementById('pub-sub');
+    if (pubSubEl) pubSubEl.textContent = products.length + ' products' + (catalog.expiryDate ? ' · Till ' + catalog.expiryDate : '');
+    const logoWrap = document.getElementById('pub-logo-wrap');
+    if (logoWrap) {
+      if (owner.logoUrl) {
+        logoWrap.innerHTML = '<img class="pub-logo-img" src="'+owner.logoUrl+'" alt="'+owner.firmName+'">';
       } else {
-        mainPrice = belowImg.priceField ? fval(p, belowImg.priceField) : p.salePrice || 0;
-        mrpPrice  = belowImg.mrpField   ? fval(p, belowImg.mrpField)   : 0;
+        logoWrap.innerHTML = '<div class="pub-logo-initial">'+owner.firmName.charAt(0).toUpperCase()+'</div>';
       }
-      const discPct = belowImg.showDiscount && mrpPrice && mainPrice && Number(mrpPrice) > Number(mainPrice)
-        ? Math.round((1 - Number(mainPrice) / Number(mrpPrice)) * 100) : 0;
+    }
 
-      // Image overlay tags
-      const tagHtml = imageTags.filter(k=>k&&fval(p,k)).map(k =>
-        `<span style="background:rgba(0,0,0,0.55);color:#fff;font-size:10px;padding:2px 7px;border-radius:3px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fval(p,k)}</span>`
-      ).join('');
-
-      // Line 3
-      const line3Key = belowImg.line3Field;
-      const line3Val = line3Key ? fval(p, line3Key) : '';
-      const line3Label = line3Key ? fname(line3Key) : '';
-
-      // Details chips
-      const detailChips = detailFields.map(key => {
-        const v = fval(p, key); if (!v) return '';
-        return `<span style="display:inline-flex;flex-direction:column;align-items:center;border:1px solid #e0e0e0;border-radius:6px;padding:3px 10px;font-size:10px;line-height:1.3;">
-          <span style="color:#888;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;">${fname(key)}</span>
-          <span style="color:#111;font-weight:600;">${v}</span>
-        </span>`;
-      }).filter(Boolean).join('');
-
-      // Fallback details if none configured
-      const detailsBody = detailChips || (() => {
-        let ch = '';
-        for (let i = 1; i <= 13; i++) {
-          const f = schema[`field${i}`]; const v = p[`field${i}`];
-          if (f && f.enabled && f.name && v) ch += `<span style="display:inline-flex;flex-direction:column;align-items:center;border:1px solid #e0e0e0;border-radius:6px;padding:3px 10px;font-size:10px;line-height:1.3;"><span style="color:#888;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;">${f.name}</span><span style="color:#111;font-weight:600;">${v}</span></span>`;
-        }
-        return ch;
-      })();
-
-      html += `
-      <div class="pcard" id="pcard-${p.id}">
-        <div class="pph" style="position:relative;">
-          ${showImages && p.imageUrl ? `<img src="${p.imageUrl}" style="width:100%;height:100%;object-fit:cover;">` : (showImages ? `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;color:#ddd;background:#f9f9f9;">📷</div>` : '')}
-          ${tagHtml ? `<div style="position:absolute;bottom:6px;right:6px;display:flex;flex-direction:column;align-items:flex-end;gap:3px;">${tagHtml}</div>` : ''}
-        </div>
-        <div class="pbody">
-          <div class="pname">${p.productName || p.itemNo}</div>
-          <div class="price-row" style="margin:4px 0;">
-            <span class="pnow">₹${mainPrice}</span>
-            ${mrpPrice && Number(mrpPrice)>Number(mainPrice) ? `<span class="pwas" style="text-decoration:line-through;color:#aaa;font-size:12px;">₹${mrpPrice}</span>` : ''}
-            ${discPct > 0 ? `<span class="pdisc" style="color:#e53e3e;font-size:11px;font-weight:700;">${discPct}% off</span>` : ''}
-          </div>
-          ${line3Val ? `<div style="font-size:11px;color:#666;margin-bottom:4px;">Min: ${line3Val} ${line3Key==='minQty'?(p.unit||'Pcs'):''}</div>` : ''}
-          ${detailsBody ? `
-          <details style="margin-bottom:8px;">
-            <summary style="font-size:12px;font-weight:600;color:#2e3192;cursor:pointer;padding:4px 0;list-style:none;display:flex;align-items:center;justify-content:space-between;">
-              Details <span style="font-size:10px;">▼</span>
-            </summary>
-            <div style="display:flex;flex-wrap:wrap;gap:6px;padding:8px 0;">${detailsBody}</div>
-          </details>` : ''}
-          <div class="qty-cart-row">
-            <div class="qctrl">
-              <button class="qbtn" onclick="changeQty('${p.id}',-1)">−</button>
-              <span class="qval" id="qty-${p.id}">${p.minQty||1}</span>
-              <button class="qbtn" onclick="changeQty('${p.id}',1)">+</button>
-            </div>
-            <button class="btn-atc" id="atc-${p.id}" onclick="addToCart('${p.id}')">+ Add to cart</button>
-          </div>
-        </div>
-      </div>`;
+    // Build filter dropdowns from schema — pick up to 3 enabled text/select fields
+    __pubFilterKeys = [];
+    const sc = __pubSchema;
+    for (let i = 1; i <= 13 && __pubFilterKeys.length < 3; i++) {
+      const f = sc['field'+i];
+      if (f && f.enabled && f.name && (f.type === 'text' || f.type === 'select' || !f.type)) {
+        const vals = [...new Set(products.map(p => p['field'+i]).filter(Boolean))];
+        if (vals.length > 0) __pubFilterKeys.push({ key: 'field'+i, label: f.name, vals });
+      }
+    }
+    // f-cat = first filter, f-f1 = second, f-f2 = third
+    const filterIds = ['f-cat', 'f-f1', 'f-f2'];
+    const mobFilterIds = ['mob-f-cat', 'mob-f-f1', 'mob-f-f2'];
+    const mobLabelIds = ['mob-fl-cat', 'mob-fl-f1', 'mob-fl-f2'];
+    filterIds.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ''; el && (el.style.display = 'none'); });
+    __pubFilterKeys.forEach((fk, i) => {
+      const sel = document.getElementById(filterIds[i]);
+      const mobSel = document.getElementById(mobFilterIds[i]);
+      const mobLbl = document.getElementById(mobLabelIds[i]);
+      const html = '<option value="">'+fk.label+'</option>' + fk.vals.map(v=>`<option value="${v.toLowerCase()}">${v}</option>`).join('');
+      if (sel) { sel.innerHTML = html; sel.style.display = ''; }
+      if (mobSel) mobSel.innerHTML = '<option value="">— All —</option>' + fk.vals.map(v=>`<option value="${v.toLowerCase()}">${v}</option>`).join('');
+      if (mobLbl) mobLbl.textContent = fk.label;
     });
-    html += '</div>';
+    // Show/hide mob f2 group
+    const mobF2Grp = document.getElementById('mob-fgroup-f2');
+    if (mobF2Grp) mobF2Grp.style.display = __pubFilterKeys.length >= 3 ? '' : 'none';
 
-    html += `</div>
-        <div class="cart-sidebar">
-          <div class="cart-box">
-            <div class="cart-hdr">
-              <span class="cart-htitle">Cart</span>
-              <span class="cart-cnt" id="cart-cnt">0</span>
-            </div>
-            <div class="cart-body" id="cart-body"><div class="cart-empty">Your cart is empty</div></div>
-            <div class="cart-ftr">
-              <div class="total-row">
-                <span class="total-label">Total</span>
-                <span class="total-val" id="cart-total">₹0</span>
-              </div>
-              <button class="btn-place" onclick="openOrderModal()">Place Order</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>`;
-    el.innerHTML = html;
-  }).catch(e => { el.innerHTML = `<div style="padding:60px;text-align:center;color:#c0392b;">${e.message}</div>`; });
+    // WhatsApp float
+    const waFloat = document.getElementById('wa-float');
+    const waLink = document.getElementById('wa-float-link');
+    const waNum = (owner.whatsapp || '').replace(/\D/g, '');
+    if (waNum && waFloat && waLink) {
+      waLink.href = 'https://wa.me/'+waNum+'?text=Hi, I have a query about your catalog.';
+      waFloat.classList.add('show');
+    }
+
+    // Footer
+    const footer = document.getElementById('pub-footer');
+    const footerTop = document.getElementById('pub-footer-top');
+    const footerCopy = document.getElementById('pub-footer-copy');
+    const hasSocial = owner.instagram || owner.facebook || owner.website;
+    if (footer && (owner.address || owner.email || owner.whatsapp || hasSocial)) {
+      footer.style.display = 'block';
+      let socialHtml = '';
+      if (owner.instagram) socialHtml += '<a href="'+owner.instagram+'" class="pub-social-btn" target="_blank">IG</a>';
+      if (owner.facebook) socialHtml += '<a href="'+owner.facebook+'" class="pub-social-btn" target="_blank">FB</a>';
+      if (owner.website) socialHtml += '<a href="'+owner.website+'" class="pub-social-btn" target="_blank">🌐</a>';
+      if (footerTop) footerTop.innerHTML =
+        '<div><div class="pub-footer-section-title">'+owner.firmName+'</div>'+(owner.address?'<div class="pub-footer-text">'+owner.address+'</div>':'')+'</div>'+
+        '<div><div class="pub-footer-section-title">Contact</div>'+(owner.whatsapp?'<div class="pub-footer-text">📱 '+owner.whatsapp+'</div>':'')+(owner.email?'<div class="pub-footer-text">✉ '+owner.email+'</div>':'')+'</div>'+
+        (hasSocial?'<div><div class="pub-footer-section-title">Follow us</div><div class="pub-footer-social">'+socialHtml+'</div></div>':'');
+      if (footerCopy) footerCopy.textContent = '© '+new Date().getFullYear()+' '+owner.firmName;
+      const fmsg = document.getElementById('pub-footer-msg');
+      if (fmsg && owner.footerNote) { fmsg.innerHTML = '<div style="font-size:14px;line-height:1.7;white-space:pre-wrap;">'+owner.footerNote+'</div>'; fmsg.style.display='block'; }
+    }
+
+    // Render
+    products.forEach(p => { if (!qtys[p.itemNo]) qtys[p.itemNo] = p.minQty || 1; });
+    allProducts = products;
+    currentPage = 1;
+    renderPage(products);
+    renderCart();
+  } catch(e) {
+    document.getElementById('pgrid').innerHTML = `<div style="grid-column:1/-1;padding:60px;text-align:center;color:#c0392b;">⚠️ ${e.message}</div>`;
+  }
 }
 
-function changeQty(pid, delta) {
-  const el = document.getElementById('qty-' + pid);
-  if (!el) return;
-  const p = __pubProducts.find(x => x.id === pid);
-  const min = p ? (p.minQty || 1) : 1;
-  el.textContent = Math.max(min, (parseInt(el.textContent) || min) + delta);
+function setView(v) {
+  currentView = v;
+  const g = document.getElementById('pgrid'); if (!g) return;
+  g.classList.remove('pgrid-1', 'pgrid-2');
+  g.classList.add('pgrid-'+v);
+  document.getElementById('vt-1').classList.toggle('active', v===1);
+  document.getElementById('vt-2').classList.toggle('active', v===2);
 }
 
-function addToCart(pid) {
-  const p = __pubProducts.find(x => x.id === pid);
-  const qty = parseInt(document.getElementById('qty-' + pid).textContent) || 1;
-  const existing = __cart.find(c => c.pid === pid);
-  if (existing) { existing.qty = qty; }
-  else { __cart.push({ pid, itemNo: p.itemNo, productName: p.productName || p.itemNo, qty, unit: p.unit, price: p._sellingPrice || p.discPrice || p.salePrice }); }
-  const btn = document.getElementById('atc-' + pid);
-  if (btn) { btn.textContent = 'In Cart ✓'; btn.className = 'btn-incart'; }
-  renderCartSidebar();
+function getFilteredProducts() {
+  const q = (document.getElementById('search-inp')||{value:''}).value.toLowerCase().trim();
+  const fVals = ['f-cat','f-f1','f-f2'].map(id => (document.getElementById(id)||{value:''}).value.toLowerCase());
+  return allProducts.filter(p => {
+    for (let i = 0; i < __pubFilterKeys.length; i++) {
+      if (fVals[i] && (p[__pubFilterKeys[i].key]||'').toLowerCase() !== fVals[i]) return false;
+    }
+    if (q) {
+      const s = [p.itemNo, p.productName, p.unit].concat(
+        Object.keys(__pubSchema).map(k => p[k])
+      ).filter(Boolean).join(' ').toLowerCase();
+      if (!s.includes(q)) return false;
+    }
+    return true;
+  });
 }
 
-function renderCartSidebar() {
-  const body = document.getElementById('cart-body');
-  const totalEl = document.getElementById('cart-total');
-  const cntEl = document.getElementById('cart-cnt');
-  if (!body) return;
-  if (!__cart.length) {
-    body.innerHTML = '<div class="cart-empty">Your cart is empty</div>';
-    if (totalEl) totalEl.textContent = '₹0';
-    if (cntEl) cntEl.textContent = '0';
+const ITEMS_PER_PAGE = 20;
+
+function renderPage(filtered) {
+  const isMob = window.innerWidth <= 768;
+  if (!isMob) {
+    renderProducts(filtered);
+    const pp = document.getElementById('pub-pagination'); if (pp) pp.innerHTML = '';
     return;
   }
-  let sum = 0, html = '';
-  __cart.forEach(c => {
-    sum += c.price * c.qty;
-    html += `<div class="citem">
-      <div class="citem-name">${c.productName}</div>
-      <div class="citem-sub">${c.itemNo} · ${c.qty} ${c.unit||'pcs'} · ₹${c.price} each</div>
-      <div style="font-size:12px;font-weight:700;color:#2e3192;margin-top:2px;">₹${(c.price * c.qty).toFixed(2)}</div>
-    </div>`;
-  });
-  body.innerHTML = html;
-  if (totalEl) totalEl.textContent = '₹' + sum.toFixed(2);
-  if (cntEl) cntEl.textContent = __cart.length;
-  window.__cartTotal = sum;
+  const total = filtered.length, totalPages = Math.ceil(total / ITEMS_PER_PAGE);
+  const start = (currentPage-1)*ITEMS_PER_PAGE;
+  renderProducts(filtered.slice(start, start+ITEMS_PER_PAGE));
+  const el = document.getElementById('pub-pagination'); if (!el) return;
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  const s = (currentPage-1)*ITEMS_PER_PAGE+1, e = Math.min(currentPage*ITEMS_PER_PAGE, total);
+  el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:16px 0;">
+    <button onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''} style="padding:8px 16px;border:1px solid #ddd;border-radius:8px;background:${currentPage<=1?'#f5f5f5':'#fff'};cursor:${currentPage<=1?'not-allowed':'pointer'};">← Prev</button>
+    <span style="font-size:13px;color:#888;">${s}–${e} of ${total}</span>
+    <button onclick="goPage(${currentPage+1})" ${currentPage>=totalPages?'disabled':''} style="padding:8px 16px;border:1px solid #ddd;border-radius:8px;background:${currentPage>=totalPages?'#f5f5f5':'#111'};color:${currentPage>=totalPages?'#bbb':'#fff'};cursor:${currentPage>=totalPages?'not-allowed':'pointer'};">Next →</button>
+  </div>`;
 }
 
-function openOrderModal() {
-  if (!__cart.length) return toast('Add items to cart first', true);
-  let summary = '';
-  __cart.forEach(c => {
-    summary += `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0f0f0;">
-      <span>${c.productName} ×${c.qty}</span>
-      <span style="font-weight:700;">₹${(c.price * c.qty).toFixed(2)}</span>
-    </div>`;
-  });
-  document.getElementById('order-summary').innerHTML = summary;
-  document.getElementById('order-total-display').textContent = '₹' + (window.__cartTotal || 0).toFixed(2);
-  document.getElementById('order-overlay').className = 'overlay open';
+function goPage(page) {
+  currentPage = page;
+  renderPage(getFilteredProducts());
+  window.scrollTo(0, document.getElementById('pgrid')?.offsetTop - 100 || 0);
 }
 
-function closeOrderModal() { document.getElementById('order-overlay').className = 'overlay'; }
-
-function submitOrder() {
-  const errEl = document.getElementById('o-err');
-  errEl.style.display = 'none';
-  const name = val('o-name'), phone = val('o-phone'), address = val('o-address');
-  if (!name || !phone || !address) {
-    errEl.textContent = 'Name, phone, and address are required.';
-    errEl.style.display = 'block'; return;
+function renderProducts(products) {
+  const grid = document.getElementById('pgrid'); if (!grid) return;
+  if (!products.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:60px;text-align:center;color:#888;"><div style="font-size:40px;margin-bottom:12px;">📦</div>No products found</div>';
+    const ri = document.getElementById('results-info'); if (ri) ri.style.display = 'none';
+    return;
   }
-  api('POST', '/api/orders', {
-    catalogId: __pubCatalogId,
-    customerName: name, customerPhone: phone, customerEmail: val('o-email'), address,
-    items: __cart.map(c => ({ itemNo: c.itemNo, productName: c.productName, qty: c.qty, unit: c.unit, price: c.price })),
-    total: window.__cartTotal || 0
-  }).then(d => {
-    closeOrderModal();
-    toast(`Order placed! ${d.orderNo}`);
-    __cart = []; renderCartSidebar();
-    document.querySelectorAll('.btn-incart').forEach(b => { b.textContent = 'Add to Cart'; b.className = 'btn-atc'; });
-  }).catch(e => { errEl.textContent = e.message; errEl.style.display = 'block'; });
+  const cur = getCurrency();
+  const schema = __pubSchema;
+  const df = __pubDf;
+  const imageTags = (df.imageTags || []);
+  const detailFields = (df.details || []);
+
+  grid.innerHTML = products.map(p => {
+    const imgs = getImages(p);
+    const imgSrc = imgs[0] || '';
+    const { price, was } = getPubPrice(p);
+    const disc = was && Number(was) > Number(price) ? Math.round((1-Number(price)/Number(was))*100) : 0;
+    const inC = !!cart[p.itemNo];
+
+    // Tag overlay from imageTags config
+    const tagOv = imageTags.filter(k=>k&&p[k]).map(k=>`<span class="pcard-tagov-item">${p[k]}</span>`).join('');
+
+    // Detail chips: from detailFields config or fallback to schema fields
+    let detailItems = detailFields.length
+      ? detailFields.filter(k=>p[k]).map(k=>`<div class="pcard-exp-chip"><b>${schema[k]?schema[k].name:k}</b>${p[k]}</div>`).join('')
+      : (() => { let h=''; for(let i=1;i<=13;i++){const f=schema['field'+i];const v=p['field'+i];if(f&&f.enabled&&f.name&&v) h+=`<div class="pcard-exp-chip"><b>${f.name}</b>${v}</div>`;} return h; })();
+
+    const hasDetails = !!(detailItems || p.description);
+    if (p.description) detailItems += `<div class="pcard-exp-desc">${p.description}</div>`;
+
+    return `<div class="pcard" data-itemno="${p.itemNo}">
+      <div class="pcard-img" onclick="openImgLightbox('${p.itemNo}')">
+        ${imgSrc?`<img src="${imgSrc}" alt="${p.productName||p.itemNo}" loading="lazy">`:`<div class="pcard-ph">🛍</div>`}
+        ${disc>0?`<div class="pcard-badge">${disc}% off</div>`:''}
+        <div class="pcard-incart" id="incart-${p.itemNo}" style="display:${inC?'flex':'none'};">✓</div>
+        ${tagOv?`<div class="pcard-tagov">${tagOv}</div>`:''}
+      </div>
+      <div class="pcard-body">
+        <div class="pcard-icode">${p.itemNo||''}</div>
+        <div class="pcard-name">${p.productName||p.itemNo}</div>
+        <div class="pcard-price">${cur}${Number(price).toFixed(0)}${disc>0?`<span class="pcard-was">${cur}${Number(was).toFixed(0)}</span><span class="pcard-off">${disc}% off</span>`:''}</div>
+        <div class="pcard-min">Min: ${p.minQty||1} ${p.unit||'Pcs'}</div>
+      </div>
+      ${hasDetails?`<button class="pcard-det-btn" id="pdbtn-${p.itemNo}" onclick="toggleCardDet('${p.itemNo}')"><span>Details</span><span id="pdarr-${p.itemNo}" style="font-size:9px;">▼</span></button>
+      <div class="pcard-expand" id="pxd-${p.itemNo}">
+        ${detailItems?`<div class="pcard-exp-row">${detailItems}</div>`:''}
+      </div>`:''}
+      <div class="pcard-foot">
+        <button class="pcard-atc${inC?' on':''}" id="catc-${p.itemNo}" onclick="cardAddCart('${p.itemNo}')">${inC?'✓ Added':'+ Add to cart'}</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const ri = document.getElementById('results-info');
+  if (ri) { ri.textContent = products.length+' of '+allProducts.length+' products'; ri.style.display = 'block'; }
+  const nr = document.getElementById('no-results'); if (nr) nr.style.display = 'none';
+}
+
+function toggleCardDet(itemNo) {
+  const el = document.getElementById('pxd-'+itemNo);
+  const arr = document.getElementById('pdarr-'+itemNo);
+  if (!el) return;
+  const open = el.classList.toggle('open');
+  if (arr) arr.textContent = open ? '▲' : '▼';
+}
+
+function applyFilters() {
+  const q = (document.getElementById('search-inp')||{value:''}).value.trim();
+  const clr = document.getElementById('search-clr'); if (clr) clr.style.display = q ? 'block' : 'none';
+  currentPage = 1;
+  const filtered = getFilteredProducts();
+  renderPage(filtered);
+  buildFilterTags();
+  updateMobFilterCount();
+  const nr = document.getElementById('no-results');
+  if (nr) nr.style.display = filtered.length===0 && allProducts.length>0 ? 'block' : 'none';
+}
+
+function buildFilterTags() {
+  const q = (document.getElementById('search-inp')||{value:''}).value.trim();
+  const tags = [];
+  if (q) tags.push({l:`"${q}"`, c:()=>{document.getElementById('search-inp').value='';applyFilters();}});
+  ['f-cat','f-f1','f-f2'].forEach((id, i) => {
+    const el = document.getElementById(id); if (!el || !el.value) return;
+    const fk = __pubFilterKeys[i];
+    tags.push({l:`${fk?fk.label:id}: ${el.value}`, c:()=>{el.value='';applyFilters();}});
+  });
+  const bar = document.getElementById('filter-tags');
+  if (bar) bar.innerHTML = tags.map((t,i)=>`<span class="ftag">${t.l}<button id="ft${i}" style="background:none;border:none;cursor:pointer;margin-left:4px;color:#888;">✕</button></span>`).join('');
+  tags.forEach((t,i)=>{const b=document.getElementById('ft'+i);if(b) b.addEventListener('click',t.c);});
+  const row = document.getElementById('ftags-row'); if (row) row.style.display = tags.length>0 ? 'flex' : 'none';
+}
+
+function clearSearch() { const el=document.getElementById('search-inp'); if(el) el.value=''; applyFilters(); }
+
+function clearAllFilters() {
+  ['search-inp'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+  ['f-cat','f-f1','f-f2','mob-f-cat','mob-f-f1','mob-f-f2'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+  applyFilters();
+}
+
+function updateMobFilterCount() {
+  const cnt = ['f-cat','f-f1','f-f2'].filter(id=>{const el=document.getElementById(id);return el&&el.value!=='';}).length;
+  const badge = document.getElementById('mob-filter-count');
+  if (badge) { badge.textContent=cnt; badge.style.display=cnt>0?'inline':'none'; }
+}
+
+function syncFilter(dId, mId) {
+  const src=document.getElementById(mId), dst=document.getElementById(dId);
+  if (src&&dst) dst.value=src.value;
+  applyFilters();
+}
+
+function openMobFilterSheet() {
+  ['cat','f1','f2'].forEach(k=>{
+    const s=document.getElementById('f-'+k), d=document.getElementById('mob-f-'+k);
+    if(s&&d) d.value=s.value;
+  });
+  const s=document.getElementById('mob-filter-sheet'), o=document.getElementById('mob-sheet-overlay');
+  if(s) s.classList.add('open'); if(o) o.classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeMobFilterSheet() {
+  const s=document.getElementById('mob-filter-sheet'), o=document.getElementById('mob-sheet-overlay');
+  if(s) s.classList.remove('open'); if(o) o.classList.remove('open');
+  document.body.style.overflow=''; updateMobFilterCount();
+}
+function openMobCart() {
+  const d=document.getElementById('mob-cart-drawer'), o=document.getElementById('mob-cart-ol');
+  if(d) d.classList.add('open'); if(o) o.classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeMobCart() {
+  const d=document.getElementById('mob-cart-drawer'), o=document.getElementById('mob-cart-ol');
+  if(d) d.classList.remove('open'); if(o) o.classList.remove('open');
+  document.body.style.overflow='';
+}
+
+// ── CART ──────────────────────────────────────────────────────────────────
+function cardAddCart(id) {
+  const p = currentProducts.find(x=>x.itemNo===id); if(!p) return;
+  if (cart[id]) delete cart[id];
+  else {
+    if (!qtys[id]) qtys[id] = p.minQty||1;
+    cart[id] = {id, name:p.productName||p.itemNo, price:getPubPrice(p).price, unit:p.unit||'Pcs', qty:qtys[id], img:getImages(p)[0]||''};
+  }
+  const inC = !!cart[id];
+  const btn = document.getElementById('catc-'+id);
+  if (btn) { btn.textContent=inC?'✓ Added':'+ Add to cart'; btn.className='pcard-atc'+(inC?' on':''); }
+  const badge = document.getElementById('incart-'+id);
+  if (badge) badge.style.display = inC ? 'flex' : 'none';
+  renderCart();
+  toast(inC ? (p.productName||id)+' added!' : 'Removed from cart');
+}
+
+function removeCart(id) {
+  delete cart[id];
+  const btn = document.getElementById('catc-'+id);
+  if (btn) { btn.textContent='+ Add to cart'; btn.className='pcard-atc'; }
+  const badge = document.getElementById('incart-'+id);
+  if (badge) badge.style.display = 'none';
+  renderCart();
+}
+
+function cChQty(id, delta) {
+  const p = currentProducts.find(x=>x.itemNo===id);
+  const min = p?(p.minQty||1):1;
+  if (!cart[id]) return;
+  cart[id].qty = Math.max(min, cart[id].qty+delta);
+  qtys[id] = cart[id].qty;
+  renderCart();
+}
+
+function renderCart() {
+  const ids = Object.keys(cart), cnt = ids.length;
+  const cntEl = document.getElementById('cart-cnt'); if (cntEl) cntEl.textContent = cnt;
+  const body = document.getElementById('cart-body');
+  const btnPlace = document.getElementById('btn-place');
+  let total = 0;
+  if (!cnt) {
+    if (body) body.innerHTML = '<div class="cart-empty">No items yet.<br>Add products to start.</div>';
+    if (btnPlace) btnPlace.disabled = true;
+    const ct = document.getElementById('cart-total'); if (ct) ct.textContent = getCurrency()+'0';
+  } else {
+    if (btnPlace) btnPlace.disabled = false;
+    let html = '';
+    ids.forEach(id => {
+      const item=cart[id], sub=item.price*item.qty; total+=sub;
+      html += `<div class="citem"><div class="citem-top"><div class="citem-img">${item.img?`<img src="${item.img}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;">`:''}</div><div style="flex:1;min-width:0;"><div class="citem-name">${item.name}</div><div class="citem-sub">${item.id}</div></div><button class="crm" onclick="removeCart('${id}')">✕</button></div><div class="citem-bot"><div class="qctrl"><button class="qbtn" id="cm-${id}">−</button><span class="qval" id="cq-${id}">${item.qty}</span><button class="qbtn" id="cp-${id}">+</button></div><span class="citem-price">${getCurrency()}${sub}</span></div></div>`;
+    });
+    if (body) body.innerHTML = html;
+    const ct = document.getElementById('cart-total'); if (ct) ct.textContent = getCurrency()+total;
+    ids.forEach(id => {
+      const m=document.getElementById('cm-'+id); if(m) m.addEventListener('click',()=>cChQty(id,-1));
+      const pl=document.getElementById('cp-'+id); if(pl) pl.addEventListener('click',()=>cChQty(id,1));
+    });
+  }
+  // Mobile sync
+  const fabCnt = document.getElementById('mob-cart-fab-cnt');
+  if (fabCnt) { fabCnt.textContent=cnt; fabCnt.style.display=cnt>0?'block':'none'; }
+  const mobBody = document.getElementById('mob-cart-body');
+  const deskBody = document.getElementById('cart-body');
+  if (mobBody && deskBody) {
+    mobBody.innerHTML = deskBody.innerHTML;
+    ids.forEach(id=>{
+      const mm=mobBody.querySelector('#cm-'+id); if(mm) mm.addEventListener('click',()=>cChQty(id,-1));
+      const mp=mobBody.querySelector('#cp-'+id); if(mp) mp.addEventListener('click',()=>cChQty(id,1));
+    });
+  }
+  const mobTotal = document.getElementById('mob-cart-total');
+  const mobCnt = document.getElementById('mob-cart-cnt-d');
+  const mobBtn = document.getElementById('mob-btn-place');
+  if (mobTotal) mobTotal.textContent = getCurrency()+total;
+  if (mobCnt) mobCnt.textContent = cnt;
+  if (mobBtn) { mobBtn.disabled=cnt===0; mobBtn.style.opacity=cnt>0?'1':'0.4'; }
+}
+
+// ── ORDER ──────────────────────────────────────────────────────────────────
+function openOrder() {
+  const ids = Object.keys(cart); if (!ids.length) return;
+  let total=0, html='';
+  ids.forEach(id=>{
+    const item=cart[id], sub=item.price*item.qty; total+=sub;
+    html += `<div class="oitem"><div class="oitem-img">${item.img?`<img src="${item.img}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;">`:''}</div><div style="flex:1;"><div class="oitem-name">${item.name}</div><div class="oitem-qty">${item.qty} ${item.unit}</div></div><span class="oitem-price">${getCurrency()}${sub}</span></div>`;
+  });
+  const osum = document.getElementById('osum'); if (osum) osum.innerHTML = html;
+  const ototal = document.getElementById('ototal'); if (ototal) ototal.textContent = getCurrency()+total;
+  const oerr = document.getElementById('oerr'); if (oerr) oerr.style.display = 'none';
+  ['o-name','o-phone','o-email','o-addr','o-remark'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+  const ov = document.getElementById('overlay'); if (ov) ov.classList.add('open');
+}
+function closeOrder() {
+  const ov = document.getElementById('overlay'); if (ov) ov.classList.remove('open');
+}
+
+async function submitOrder() {
+  const name = (document.getElementById('o-name')||{value:''}).value.trim();
+  const cc = (document.getElementById('o-cc')||{value:'+91'}).value;
+  const phone = (document.getElementById('o-phone')||{value:''}).value.trim();
+  const email = (document.getElementById('o-email')||{value:''}).value.trim();
+  const addr = (document.getElementById('o-addr')||{value:''}).value.trim();
+  const remark = (document.getElementById('o-remark')||{value:''}).value.trim();
+  const errEl = document.getElementById('oerr');
+  if (!name) { if(errEl){errEl.textContent='Name required';errEl.style.display='block';} return; }
+  if (!phone) { if(errEl){errEl.textContent='Phone required';errEl.style.display='block';} return; }
+  if (errEl) errEl.style.display = 'none';
+  const items = Object.values(cart).map(i=>({itemNo:i.id,productName:i.name,qty:i.qty,price:i.price,unit:i.unit}));
+  const total = items.reduce((s,i)=>s+i.qty*i.price,0);
+  try {
+    await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+TOKEN},body:JSON.stringify({
+      catalogId:currentCatalogId, ownerId:currentOwner.id||currentOwner._id,
+      customerName:name, countryCode:cc, customerPhone:phone, customerEmail:email,
+      address:addr, remark, items, total,
+      catalogName:(document.getElementById('pub-cat-title')||{textContent:''}).textContent
+    })});
+    closeOrder();
+    cart = {}; qtys = {};
+    renderCart();
+    renderPage(allProducts);
+    toast('Order placed! 🎉');
+    const waNum = (currentOwner.whatsapp||'').replace(/[^0-9]/g,'');
+    if (waNum) {
+      const lines = ['New Order — '+currentOwner.firmName, 'From: '+name+' | '+(cc||'')+(phone||'')];
+      if (email) lines.push('Email: '+email);
+      items.forEach(i=>{lines.push('• '+i.productName+' x'+i.qty+' '+i.unit+' = '+getCurrency()+i.price);});
+      lines.push('Total: '+getCurrency()+total);
+      if (remark) lines.push('Note: '+remark);
+      window.open('https://wa.me/'+waNum+'?text='+encodeURIComponent(lines.join('\n')),'_blank');
+    }
+  } catch(e) { if(errEl){errEl.textContent='Failed. Try again.';errEl.style.display='block';} }
+}
+
+// ── LIGHTBOX ──────────────────────────────────────────────────────────────
+let pdLbImgs = [], pdLbIndex = 0;
+
+async function openImgLightbox(itemNo) {
+  const p = currentProducts.find(x=>x.itemNo===itemNo); if (!p) return;
+  const allImgs = getImages(p);
+  if (!allImgs.length) return;
+  pdLbImgs = allImgs; pdLbIndex = 0;
+  pdLbShow();
+  document.getElementById('pd-lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function pdLbShow() {
+  const img = document.getElementById('pd-lightbox-img');
+  const cnt = document.getElementById('pd-lb-counter');
+  if (img) img.src = pdLbImgs[pdLbIndex]||'';
+  if (cnt) cnt.textContent = pdLbImgs.length>1?(pdLbIndex+1)+'/'+pdLbImgs.length:'';
+  const prev=document.getElementById('pd-lb-prev'), next=document.getElementById('pd-lb-next');
+  if (prev) prev.style.display = pdLbImgs.length>1?'flex':'none';
+  if (next) next.style.display = pdLbImgs.length>1?'flex':'none';
+}
+
+function pdLbNav(dir) { pdLbIndex=(pdLbIndex+dir+pdLbImgs.length)%pdLbImgs.length; pdLbShow(); }
+function closePdLightbox() { document.getElementById('pd-lightbox').classList.remove('open'); document.body.style.overflow=''; }
+
+(function(){
+  let _tx=null;
+  document.addEventListener('touchstart',e=>{if(!document.getElementById('pd-lightbox').classList.contains('open')) return; _tx=e.touches[0].clientX;},{passive:true});
+  document.addEventListener('touchend',e=>{if(_tx===null||!document.getElementById('pd-lightbox').classList.contains('open')) return; const dx=e.changedTouches[0].clientX-_tx; _tx=null; if(Math.abs(dx)>40) pdLbNav(dx<0?1:-1);},{passive:true});
+})();
+
+// ── PRODUCT DETAIL MODAL (stub — lightbox used instead) ───────────────────
+let __pdmProduct = null, __pdmImgs = [], __pdmIdx = 0;
+function closePdModal() {
+  document.getElementById('pdm-overlay').classList.remove('open');
+  document.getElementById('pdm-sheet').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function pdmNav(dir) { __pdmIdx=(__pdmIdx+dir+__pdmImgs.length)%__pdmImgs.length; pdmShowImg(); }
+function pdmShowImg() {
+  const track = document.getElementById('pdm-img-track'); if (!track) return;
+  const imgs = __pdmImgs;
+  track.innerHTML = imgs.length ? `<img class="pdm-img-slide" src="${imgs[__pdmIdx]}" style="opacity:1;">` : '';
+  const dots = document.getElementById('pdm-dots');
+  if (dots) dots.innerHTML = imgs.map((_, i)=>`<div class="pdm-dot${i===__pdmIdx?' on':''}"></div>`).join('');
+  document.getElementById('pdm-prev') && (document.getElementById('pdm-prev').style.display = imgs.length>1?'flex':'none');
+  document.getElementById('pdm-next') && (document.getElementById('pdm-next').style.display = imgs.length>1?'flex':'none');
+}
+function pdmToggleDetails() {
+  const body = document.getElementById('pdm-body'), tog = document.getElementById('pdm-toggle');
+  if (body) body.classList.toggle('open');
+  if (tog) tog.classList.toggle('open');
+}
+function pdmQty(delta) {
+  const el = document.getElementById('pdm-qty'); if (!el) return;
+  const p = __pdmProduct, min = p?(p.minQty||1):1;
+  el.textContent = Math.max(min, (parseInt(el.textContent)||min)+delta);
+}
+function pdmCart() {
+  const p = __pdmProduct; if (!p) return;
+  const qty = parseInt(document.getElementById('pdm-qty').textContent)||1;
+  if (!qtys[p.itemNo]) qtys[p.itemNo] = qty;
+  if (cart[p.itemNo]) { cart[p.itemNo].qty = qty; }
+  else { cart[p.itemNo]={id:p.itemNo,name:p.productName||p.itemNo,price:getPubPrice(p).price,unit:p.unit||'Pcs',qty,img:getImages(p)[0]||''}; }
+  const atc = document.getElementById('pdm-atc');
+  if (atc) { atc.textContent='✓ In cart'; atc.className='pdm-atc on'; }
+  renderCart(); toast((p.productName||p.itemNo)+' added!');
 }
 
 render();

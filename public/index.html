@@ -635,7 +635,7 @@ function copyLink(path) {
 function openCatalog(catId, catName, catSlug) {
   const el = document.getElementById('panel-w-catalogs');
   if (!el) return;
-  // Pre-load schema for column headers
+  // Pre-load schema
   const _sid = __sessionId;
   api('GET', '/api/wholesaler/field-schema').then(s => { if (__sessionId === _sid) window.__fieldSchema = s; }).catch(() => {});
 
@@ -648,13 +648,13 @@ function openCatalog(catId, catName, catSlug) {
     </div>
   </div>
   <div style="display:flex;gap:8px;margin-bottom:20px;" id="cat-subtabs">
-    <button class="btn btn-dark btn-sm" id="cst-items" onclick="showCatTab('items','${catId}')">Items List</button>
-    <button class="btn btn-outline btn-sm" id="cst-manual" onclick="showCatTab('manual','${catId}')">Manual Entry</button>
-    <button class="btn btn-outline btn-sm" id="cst-csv" onclick="showCatTab('csv','${catId}')">CSV / XLSX Import</button>
+    <button class="btn btn-dark btn-sm" id="cst-items" onclick="showCatTab('items','${catId}','${catSlug}')">Items in Catalog</button>
+    <button class="btn btn-outline btn-sm" id="cst-add" onclick="showCatTab('add','${catId}','${catSlug}')">Add from Item Master</button>
+    <button class="btn btn-outline btn-sm" id="cst-display" onclick="showCatTab('display','${catId}','${catSlug}')">Display Format</button>
   </div>
   <div id="cat-tab-content"></div>`;
 
-  showCatTab('items', catId);
+  showCatTab('items', catId, catSlug);
 }
 
 function backToCatalogs() {
@@ -662,16 +662,16 @@ function backToCatalogs() {
   loadTab('w-catalogs');
 }
 
-function showCatTab(tab, catId) {
-  ['items','manual','csv'].forEach(t => {
+function showCatTab(tab, catId, catSlug) {
+  ['items','add','display'].forEach(t => {
     const btn = document.getElementById('cst-' + t);
     if (btn) btn.className = 'btn btn-sm ' + (t === tab ? 'btn-dark' : 'btn-outline');
   });
   const el = document.getElementById('cat-tab-content');
   if (!el) return;
   if (tab === 'items') renderCatItems(catId, el);
-  else if (tab === 'manual') renderManualEntry(catId, el);
-  else if (tab === 'csv') renderCsvImport(catId, el);
+  else if (tab === 'add') renderCatAddItems(catId, el);
+  else if (tab === 'display') renderCatDisplayFormat(catId, el);
 }
 
 function renderCatItems(catId, el) {
@@ -683,129 +683,264 @@ function renderCatItems(catId, el) {
       const f = schema[`field${i}`];
       if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, name: f.name });
     }
-    if (!prods.length) { el.innerHTML = '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No items yet. Use Manual Entry or CSV Import to add products.</div>'; return; }
+    if (!prods.length) {
+      el.innerHTML = '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No items yet. Use "Add from Item Master" to add products.</div>';
+      return;
+    }
     let html = `<div class="tbl-wrap"><table class="tbl"><thead><tr>
-      <th>Item Code</th><th>Name</th><th>Selling Price</th><th>Category</th><th>Min Qty</th><th>Unit</th>
+      <th>Image</th><th>Item Code</th><th>Name</th><th>Active</th>
       ${customCols.map(c => `<th>${c.name}</th>`).join('')}
+      <th>Remove</th>
     </tr></thead><tbody>`;
     prods.forEach(p => {
-      html += `<tr><td><b>${p.itemNo}</b></td><td>${p.productName||'-'}</td><td>₹${p.salePrice}</td><td>${p.category||'-'}</td><td>${p.minQty||1}</td><td>${p.unit||'-'}</td>`;
-      customCols.forEach(c => { html += `<td>${p[c.key]||'-'}</td>`; });
-      html += '</tr>';
+      const imgHtml = p.imageUrl
+        ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;">`
+        : `<div style="width:36px;height:36px;background:#f0f0f0;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px;">📷</div>`;
+      html += `<tr>
+        <td>${imgHtml}</td>
+        <td><b>${p.itemNo}</b></td>
+        <td>${p.productName||'-'}</td>
+        <td><span class="badge ${p.active===false?'bg-red':'bg-green'}">${p.active===false?'No':'Yes'}</span></td>
+        ${customCols.map(c => `<td>${p[c.key]||'-'}</td>`).join('')}
+        <td><button class="btn-danger-sm" style="padding:2px 8px;font-size:11px;" onclick="removeCatItem('${catId}','${p.id}')">Remove</button></td>
+      </tr>`;
     });
     html += '</tbody></table></div>';
     el.innerHTML = html;
   });
 }
 
-function renderManualEntry(catId, el) {
-  const schema = window.__fieldSchema || {};
-  const customFields = [];
-  for (let i = 1; i <= 13; i++) {
-    const f = schema[`field${i}`];
-    if (f && f.enabled && f.name) customFields.push({ key: `field${i}`, name: f.name, type: f.type, required: f.required });
-  }
-  let customHtml = '';
-  if (customFields.length) {
-    const pairs = [];
-    for (let i = 0; i < customFields.length; i += 2) {
-      const a = customFields[i], b = customFields[i+1];
-      pairs.push(`<div class="frow">
-        <div class="fgd"><label>${a.name}${a.required?' *':''}</label><input class="inp inp-full" id="mp-${a.key}" type="${a.type==='number'?'number':'text'}" placeholder="${a.name}"></div>
-        ${b ? `<div class="fgd"><label>${b.name}${b.required?' *':''}</label><input class="inp inp-full" id="mp-${b.key}" type="${b.type==='number'?'number':'text'}" placeholder="${b.name}"></div>` : '<div></div>'}
-      </div>`);
-    }
-    customHtml = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;"><div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">Custom Fields</div>${pairs.join('')}</div>`;
-  }
-  el.innerHTML = `
-  <div class="card">
-    <div class="card-title">Add Item Manually</div>
-    <div id="manual-msg"></div>
-    <div class="frow">
-      <div class="fgd"><label>Item Code *</label><input class="inp inp-full" id="mp-itemNo" placeholder="e.g. SKU001"></div>
-      <div class="fgd"><label>Item Name</label><input class="inp inp-full" id="mp-productName" placeholder="Product name"></div>
-    </div>
-    <div class="frow">
-      <div class="fgd"><label>Selling Price *</label><input class="inp inp-full" id="mp-salePrice" type="number" placeholder="0.00"></div>
-      <div class="fgd"><label>Category</label><input class="inp inp-full" id="mp-category" placeholder="Category"></div>
-    </div>
-    <div class="frow">
-      <div class="fgd"><label>Min Qty</label><input class="inp inp-full" id="mp-minQty" type="number" placeholder="1"></div>
-      <div class="fgd"><label>Unit</label><input class="inp inp-full" id="mp-unit" placeholder="Pcs"></div>
-    </div>
-    <div class="fgd"><label>Image Name</label><input class="inp inp-full" id="mp-imageName" placeholder="filename.jpg"></div>
-    ${customHtml}
-    <div style="margin-top:14px;">
-      <button class="btn btn-dark btn-sm" onclick="addProductManual('${catId}')">Add Item</button>
-    </div>
-  </div>`;
+function removeCatItem(catId, itemId) {
+  if (!confirm('Remove this item from catalog?')) return;
+  api('DELETE', `/api/catalogs/${catId}/items/${itemId}`)
+    .then(() => { toast('Item removed from catalog'); renderCatItems(catId, document.getElementById('cat-tab-content')); })
+    .catch(e => toast(e.message, true));
 }
 
-function addProductManual(catId) {
-  const msgEl = document.getElementById('manual-msg');
-  msgEl.innerHTML = '';
-  const schema = window.__fieldSchema || {};
-  const body = {
-    itemNo: val('mp-itemNo'), productName: val('mp-productName'),
-    salePrice: val('mp-salePrice'), category: val('mp-category'),
-    minQty: val('mp-minQty'), unit: val('mp-unit'), imageName: val('mp-imageName'),
-  };
-  for (let i = 1; i <= 13; i++) {
-    const f = schema[`field${i}`];
-    if (f && f.enabled && f.name) {
-      const v = val(`mp-field${i}`);
-      if (v) body[`field${i}`] = v;
-    }
-  }
-  if (!body.itemNo || !body.salePrice) {
-    msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code and Selling Price are required.</div>'; return;
-  }
-  api('POST', `/api/catalogs/${catId}/products`, body).then(() => {
-    toast('Item added!');
-    msgEl.innerHTML = '<div class="ok-msg" style="display:block;">✓ Item added successfully.</div>';
-    // clear fields
-    ['itemNo','productName','salePrice','category','minQty','unit','imageName'].forEach(k => {
-      const el2 = document.getElementById('mp-' + k); if (el2) el2.value = '';
-    });
+// ── Add Items from Item Master picker ──
+function renderCatAddItems(catId, el) {
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading Item Master...</div>';
+  // Get current catalog items to pre-check
+  Promise.all([
+    __itemMasterData.length ? Promise.resolve(__itemMasterData) : api('GET', '/api/wholesaler/all-items'),
+    api('GET', `/api/catalogs/${catId}/products`),
+    api('GET', '/api/wholesaler/field-schema'),
+  ]).then(([allItems, catItems, schema]) => {
+    if (allItems !== __itemMasterData) { __itemMasterData = allItems; __itemMasterSchema = schema; window.__fieldSchema = schema; }
+    const inCatalog = new Set(catItems.map(p => p.id));
+    const activeItems = allItems.filter(p => p.active !== false);
+    const customCols = [];
     for (let i = 1; i <= 13; i++) {
-      const el2 = document.getElementById('mp-field' + i); if (el2) el2.value = '';
+      const f = schema[`field${i}`];
+      if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, name: f.name });
     }
-  }).catch(e => { msgEl.innerHTML = `<div class="err-msg" style="display:block;">${e.message}</div>`; });
+
+    let html = `
+    <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <input class="inp" id="catpick-search" placeholder="Search items..." style="flex:1;max-width:380px;"
+        oninput="filterCatPickerItems('${catId}')">
+      <span style="font-size:12px;color:#888;" id="catpick-count">${activeItems.length} items</span>
+    </div>
+    <div style="margin-bottom:12px;">
+      <button class="btn btn-dark btn-sm" onclick="addSelectedToCatalog('${catId}')">+ Add Selected to Catalog</button>
+      <button class="btn btn-outline btn-sm" onclick="selectAllCatPicker(true)">Select All</button>
+      <button class="btn btn-outline btn-sm" onclick="selectAllCatPicker(false)">Deselect All</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="catpick-table">
+        <thead><tr>
+          <th style="width:32px;"><input type="checkbox" id="catpick-all" onchange="selectAllCatPicker(this.checked)"></th>
+          <th style="width:48px;">Image</th>
+          <th>Item Code</th><th>Name</th>
+          ${customCols.map(c => `<th>${c.name}</th>`).join('')}
+          <th>Status</th>
+        </tr></thead>
+        <tbody id="catpick-tbody">`;
+
+    activeItems.forEach(p => {
+      const alreadyIn = inCatalog.has(p.id);
+      const imgHtml = p.imageUrl
+        ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;">`
+        : `<div style="width:36px;height:36px;background:#f0f0f0;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px;">📷</div>`;
+      html += `<tr>
+        <td><input type="checkbox" class="catpick-chk" data-id="${p.id}" ${alreadyIn ? 'checked' : ''}></td>
+        <td>${imgHtml}</td>
+        <td><b>${p.itemNo}</b></td>
+        <td>${p.productName||'-'}</td>
+        ${customCols.map(c => `<td>${p[c.key]||'-'}</td>`).join('')}
+        <td>${alreadyIn ? '<span class="badge bg-green">In Catalog</span>' : '<span class="badge bg-amber">Not Added</span>'}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+    // store for filter
+    el.dataset.catId = catId;
+    el._allItems = activeItems;
+    el._inCatalog = inCatalog;
+    el._customCols = customCols;
+  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
 }
 
-function renderCsvImport(catId, el) {
-  el.innerHTML = `
-  <div class="card">
-    <div class="card-title">Upload CSV / XLSX</div>
-    <div style="background:#f0f4ff;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12px;color:#2e3192;line-height:1.8;">
-      <b>Required columns:</b> Item Code, Item Name, Selling Price<br>
-      <b>Optional columns:</b> Image Name, Category, Min Qty, Unit + any custom fields you've defined in Field Settings<br>
-      <b>Tip:</b> Go to Field Settings → Download Template to get a ready-made CSV header.
-    </div>
-    <div style="border:2px dashed #e8e8e8;border-radius:8px;padding:24px;text-align:center;margin-bottom:12px;">
-      <div style="font-size:13px;color:#888;margin-bottom:8px;">Select your CSV or XLSX file</div>
-      <input type="file" id="csv-file-${catId}" accept=".csv,.xlsx,.xls" style="width:100%;">
-    </div>
-    <button class="btn btn-dark btn-sm" onclick="uploadCsv('${catId}')">Upload &amp; Import</button>
-    <div id="csv-result-${catId}" style="margin-top:12px;"></div>
-  </div>`;
+function filterCatPickerItems(catId) {
+  const el = document.getElementById('cat-tab-content');
+  if (!el || !el._allItems) return;
+  const q = (document.getElementById('catpick-search')?.value || '').trim().toLowerCase();
+  const inCatalog = el._inCatalog || new Set();
+  const customCols = el._customCols || [];
+  const items = q
+    ? el._allItems.filter(p => {
+        if ((p.itemNo||'').toLowerCase().includes(q)) return true;
+        if ((p.productName||'').toLowerCase().includes(q)) return true;
+        if ((p.imageName||'').toLowerCase().includes(q)) return true;
+        for (let i = 1; i <= 13; i++) {
+          const f = __itemMasterSchema[`field${i}`];
+          if (f && f.enabled && f.name && (p[`field${i}`]||'').toString().toLowerCase().includes(q)) return true;
+        }
+        return false;
+      })
+    : el._allItems;
+
+  const countEl = document.getElementById('catpick-count');
+  if (countEl) countEl.textContent = items.length + ' items';
+
+  const tb = document.getElementById('catpick-tbody');
+  if (!tb) return;
+  tb.innerHTML = items.map(p => {
+    const alreadyIn = inCatalog.has(p.id);
+    const imgHtml = p.imageUrl
+      ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;">`
+      : `<div style="width:36px;height:36px;background:#f0f0f0;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px;">📷</div>`;
+    return `<tr>
+      <td><input type="checkbox" class="catpick-chk" data-id="${p.id}" ${alreadyIn ? 'checked' : ''}></td>
+      <td>${imgHtml}</td>
+      <td><b>${p.itemNo}</b></td>
+      <td>${p.productName||'-'}</td>
+      ${customCols.map(c => `<td>${p[c.key]||'-'}</td>`).join('')}
+      <td>${alreadyIn ? '<span class="badge bg-green">In Catalog</span>' : '<span class="badge bg-amber">Not Added</span>'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="99" style="text-align:center;padding:30px;color:#bbb;">No items found</td></tr>';
 }
 
-function uploadCsv(catId) {
-  const f = document.getElementById('csv-file-' + catId);
-  if (!f || !f.files[0]) return toast('Select a file first', true);
-  const fd = new FormData(); fd.append('csv', f.files[0]);
-  const resEl = document.getElementById('csv-result-' + catId);
-  resEl.innerHTML = '<div style="font-size:12px;color:#888;padding:8px 0;">Uploading...</div>';
-  api('POST', `/api/catalogs/${catId}/upload-csv`, fd, true)
+function selectAllCatPicker(checked) {
+  document.querySelectorAll('.catpick-chk').forEach(c => c.checked = checked);
+  const allChk = document.getElementById('catpick-all');
+  if (allChk) allChk.checked = checked;
+}
+
+function addSelectedToCatalog(catId) {
+  const checked = Array.from(document.querySelectorAll('.catpick-chk:checked'));
+  if (!checked.length) return toast('Select at least one item', true);
+  const itemIds = checked.map(c => c.dataset.id);
+  api('POST', `/api/catalogs/${catId}/items`, { itemIds })
     .then(d => {
-      resEl.innerHTML = `<div style="background:#e8f5ec;border-radius:8px;padding:12px;font-size:12px;color:#16a34a;">
-        <b>✓ ${d.message}</b>
-        ${d.errorCount > 0 ? `<div style="color:#946c00;margin-top:6px;"><b>${d.errorCount} rows skipped:</b> ${d.errors.slice(0,3).map(e=>`Row ${e.row}: ${e.errors.join(', ')}`).join(' · ')}</div>` : ''}
-      </div>`;
+      toast(`${itemIds.length} item(s) added/updated in catalog`);
+      // Update in-catalog status
+      const el = document.getElementById('cat-tab-content');
+      if (el && el._inCatalog) { d.itemIds.forEach(id => el._inCatalog.add(id)); }
+      filterCatPickerItems(catId);
     })
-    .catch(e => { resEl.innerHTML = `<div style="background:#fce8e8;border-radius:8px;padding:12px;font-size:12px;color:#c0392b;">✗ ${e.message}</div>`; });
+    .catch(e => toast(e.message, true));
 }
+
+// ── Catalog Display Format ──
+function renderCatDisplayFormat(catId, el) {
+  el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
+  Promise.all([
+    api('GET', `/api/catalogs/${catId}/display-format`),
+    api('GET', '/api/wholesaler/field-schema'),
+  ]).then(([df, schema]) => {
+    const customCols = [];
+    for (let i = 1; i <= 13; i++) {
+      const f = schema[`field${i}`];
+      if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, name: f.name });
+    }
+    const dfFields = df.fields || [];
+    const viewType = df.viewType || 'grid';
+    const showImages = df.showImages !== false;
+
+    // Build field rows — one per custom col
+    const fieldRows = customCols.map((c, idx) => {
+      const existing = dfFields.find(f => f.key === c.key) || {};
+      const show = existing.show !== false;
+      const formula = existing.formula || '';
+      const order = existing.order !== undefined ? existing.order : idx;
+      return `<tr id="dfrow-${c.key}" data-key="${c.key}" data-order="${order}">
+        <td style="cursor:move;text-align:center;color:#aaa;font-size:16px;">⠿</td>
+        <td><input type="checkbox" class="df-show-chk" data-key="${c.key}" ${show ? 'checked' : ''}> ${c.name}</td>
+        <td><input class="inp" style="width:200px;" id="df-formula-${c.key}" value="${formula.replace(/"/g,'&quot;')}" placeholder="e.g. {MRP} * 0.70"></td>
+        <td>
+          <button class="btn btn-outline btn-sm" style="padding:2px 6px;" onclick="moveDfRow('${c.key}',-1)">↑</button>
+          <button class="btn btn-outline btn-sm" style="padding:2px 6px;" onclick="moveDfRow('${c.key}',1)">↓</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+    <div class="card">
+      <div class="card-title">Display Format</div>
+      <p style="font-size:12px;color:#888;margin-bottom:16px;">Configure how products appear in the public reseller-facing catalog.</p>
+      <div style="display:flex;gap:24px;margin-bottom:16px;flex-wrap:wrap;">
+        <div class="fgd">
+          <label>View Type</label>
+          <select class="inp" id="df-viewtype">
+            <option value="grid" ${viewType==='grid'?'selected':''}>Grid</option>
+            <option value="list" ${viewType==='list'?'selected':''}>List</option>
+          </select>
+        </div>
+        <div class="fgd" style="align-self:flex-end;padding-bottom:4px;">
+          <label><input type="checkbox" id="df-show-images" ${showImages?'checked':''}> Show Images</label>
+        </div>
+      </div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">Field Visibility &amp; Order</div>
+      <div class="tbl-wrap" style="margin-bottom:16px;">
+        <table class="tbl" id="df-fields-table">
+          <thead><tr><th style="width:30px;"></th><th>Field</th><th>Formula <span style="font-weight:400;color:#aaa;">(optional, e.g. {MRP} * 0.70)</span></th><th style="width:80px;">Move</th></tr></thead>
+          <tbody id="df-fields-tbody">${fieldRows || '<tr><td colspan="4" style="text-align:center;padding:20px;color:#bbb;">No custom fields defined. Go to Field Settings to add fields.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <button class="btn btn-dark btn-sm" onclick="saveCatDisplayFormat('${catId}')">Save Display Format</button>
+      <span id="df-save-msg" style="font-size:12px;color:#16a34a;margin-left:12px;display:none;">✓ Saved!</span>
+    </div>`;
+  }).catch(e => { el.innerHTML = `<div class="card" style="color:#c0392b;">${e.message}</div>`; });
+}
+
+function moveDfRow(key, dir) {
+  const tbody = document.getElementById('df-fields-tbody');
+  if (!tbody) return;
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const idx = rows.findIndex(r => r.dataset.key === key);
+  if (idx === -1) return;
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= rows.length) return;
+  if (dir === -1) tbody.insertBefore(rows[idx], rows[swapIdx]);
+  else tbody.insertBefore(rows[swapIdx], rows[idx]);
+}
+
+function saveCatDisplayFormat(catId) {
+  const viewType = document.getElementById('df-viewtype')?.value || 'grid';
+  const showImages = document.getElementById('df-show-images')?.checked !== false;
+  const tbody = document.getElementById('df-fields-tbody');
+  const rows = tbody ? Array.from(tbody.querySelectorAll('tr[data-key]')) : [];
+  const fields = rows.map((r, idx) => ({
+    key: r.dataset.key,
+    show: r.querySelector('.df-show-chk')?.checked !== false,
+    formula: document.getElementById(`df-formula-${r.dataset.key}`)?.value?.trim() || '',
+    order: idx,
+  }));
+  api('PUT', `/api/catalogs/${catId}/display-format`, { displayFormat: { viewType, showImages, fields } })
+    .then(() => {
+      toast('Display format saved!');
+      const msg = document.getElementById('df-save-msg');
+      if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
+    })
+    .catch(e => toast(e.message, true));
+}
+
+// Legacy helpers kept but no longer called from new tabs
+function renderManualEntry(catId, el) { el.innerHTML = '<div class="card" style="color:#888;">Manual entry has been replaced. Use "Add from Item Master".</div>'; }
+function addProductManual() {}
+function renderCsvImport(catId, el) { el.innerHTML = '<div class="card" style="color:#888;">CSV import for catalogs has been replaced. Use Item Master CSV Import, then "Add from Item Master".</div>'; }
+function uploadCsv() {}
 
 // ── WHOLESALER: ITEM MASTER ───────────────────────────────────────────────
 let __itemMasterData = [], __itemMasterSchema = {};
@@ -938,7 +1073,16 @@ function renderImRows(items, customCols) {
 function filterItems(q) {
   const query = (q !== undefined ? q : (document.getElementById('im-search')?.value || '')).trim().toLowerCase();
   let items = query
-    ? __itemMasterData.filter(p => (p.itemNo||'').toLowerCase().includes(query) || (p.productName||'').toLowerCase().includes(query))
+    ? __itemMasterData.filter(p => {
+        if ((p.itemNo||'').toLowerCase().includes(query)) return true;
+        if ((p.productName||'').toLowerCase().includes(query)) return true;
+        if ((p.imageName||'').toLowerCase().includes(query)) return true;
+        for (let i = 1; i <= 13; i++) {
+          const f = __itemMasterSchema[`field${i}`];
+          if (f && f.enabled && f.name && (p[`field${i}`]||'').toString().toLowerCase().includes(query)) return true;
+        }
+        return false;
+      })
     : [...__itemMasterData];
 
   // Active filter
@@ -2059,6 +2203,22 @@ function loadAdminResellers() {
 }
 
 // ── PUBLIC CATALOG ────────────────────────────────────────────────────────
+function evalFormulaField(formula, item, schema) {
+  // Replace {FieldName} with the matching field value from item
+  try {
+    const expr = formula.replace(/\{([^}]+)\}/g, (_, name) => {
+      for (let i = 1; i <= 13; i++) {
+        const f = schema[`field${i}`];
+        if (f && f.name === name) return Number(item[`field${i}`]) || 0;
+      }
+      return 0;
+    });
+    // Safe eval — only allow numbers and operators
+    if (/^[\d\s+\-*/().]+$/.test(expr)) return eval(expr); // eslint-disable-line no-eval
+    return null;
+  } catch(e) { return null; }
+}
+
 function renderPublicCatalog(userId, slug) {
   const el = document.getElementById('pub-catalog-inner');
   el.innerHTML = '<div style="padding:60px;text-align:center;color:#888;">Loading catalog...</div>';
@@ -2067,6 +2227,12 @@ function renderPublicCatalog(userId, slug) {
     __cart = [];
     __pubCatalogId = d.catalog.id;
     window.__pubSchema = d.schema || {};
+    const df = d.displayFormat || {};
+    const viewType = df.viewType || 'grid';
+    const showImages = df.showImages !== false;
+    const dfFields = df.fields || [];
+    const schema = window.__pubSchema || {};
+
     const initial = (d.owner.firmName || '?')[0].toUpperCase();
     let html = `
     <div class="pub-brand-bar">
@@ -2082,47 +2248,107 @@ function renderPublicCatalog(userId, slug) {
     </div>
     <div class="pub-body">
       <div class="pub-products-layout">
-        <div class="pub-products-main">
-          <div class="pgrid" id="pub-pgrid">`;
+        <div class="pub-products-main">`;
 
-    d.products.forEach(p => {
-      const discounted = p.discPrice && p.salePrice && p.discPrice < p.salePrice;
-      const displayPrice = p.discPrice || p.salePrice;
-      const discPct = discounted ? Math.round((1 - p.discPrice / p.salePrice) * 100) : 0;
-      const schema = window.__pubSchema || {};
-      let customHtml = '';
-      for (let i = 1; i <= 13; i++) {
-        const f = schema[`field${i}`]; const v = p[`field${i}`];
-        if (f && f.enabled && f.name && v) {
-          customHtml += `<div class="pmeta" style="font-size:10px;"><b>${f.name}:</b> ${f.type==='number'&&f.decimals ? Number(v).toFixed(f.decimals) : v}</div>`;
-        }
-      }
-      html += `
-      <div class="pcard" id="pcard-${p.id}">
-        <div class="pph">${p.imageUrl ? `<img src="${p.imageUrl}" style="width:100%;height:100%;object-fit:cover;">` : '📦'}</div>
-        <div class="pbody">
-          <div class="pname">${p.productName || p.itemNo}</div>
-          <div class="pcode">${p.itemNo}</div>
-          ${p.category ? `<div class="pmeta">${p.category}</div>` : ''}
-          ${customHtml}
-          <div class="price-row">
-            <span class="pnow">₹${displayPrice}</span>
-            ${discounted ? `<span class="pwas">₹${p.salePrice}</span><span class="pdisc">${discPct}% off</span>` : ''}
-          </div>
-          ${p.minQty > 1 ? `<div class="pminord">Min order: ${p.minQty} ${p.unit||'pcs'}</div>` : ''}
-          <div class="qty-cart-row">
-            <div class="qctrl">
-              <button class="qbtn" onclick="changeQty('${p.id}',-1)">−</button>
-              <span class="qval" id="qty-${p.id}">${p.minQty||1}</span>
-              <button class="qbtn" onclick="changeQty('${p.id}',1)">+</button>
+    // Determine visible fields in display order
+    const visibleFields = dfFields.length
+      ? dfFields.filter(f => f.show !== false)
+      : (() => {
+          const auto = [];
+          for (let i = 1; i <= 13; i++) {
+            const f = schema[`field${i}`];
+            if (f && f.enabled && f.name) auto.push({ key: `field${i}`, formula: '' });
+          }
+          return auto;
+        })();
+
+    if (viewType === 'list') {
+      // List view: table
+      html += `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+        ${showImages ? '<th style="width:60px;">Image</th>' : ''}
+        <th>Item Code</th><th>Name</th>
+        ${visibleFields.map(f => { const sc = schema[Object.keys(schema).find(k => k === f.key)]; return `<th>${sc ? sc.name : f.key}</th>`; }).join('')}
+        <th>Price</th><th>Order</th>
+      </tr></thead><tbody>`;
+
+      d.products.forEach(p => {
+        const discounted = p.discPrice && p.salePrice && p.discPrice < p.salePrice;
+        const displayPrice = p.discPrice || p.salePrice;
+        const discPct = discounted ? Math.round((1 - p.discPrice / p.salePrice) * 100) : 0;
+        html += `<tr>
+          ${showImages ? `<td>${p.imageUrl ? `<img src="${p.imageUrl}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;">` : '📷'}</td>` : ''}
+          <td><b>${p.itemNo}</b></td>
+          <td>${p.productName||p.itemNo}</td>
+          ${visibleFields.map(f => {
+            const fval = f.formula ? evalFormulaField(f.formula, p, schema) : p[f.key];
+            const sc = schema[f.key];
+            const disp = fval !== null && fval !== undefined ? (sc && sc.type === 'number' && sc.decimals ? Number(fval).toFixed(sc.decimals) : fval) : '-';
+            return `<td>${disp}</td>`;
+          }).join('')}
+          <td><span class="pnow" style="font-size:13px;">₹${displayPrice}</span>${discounted ? ` <span class="pdisc">${discPct}% off</span>` : ''}</td>
+          <td>
+            <div class="qty-cart-row" style="flex-wrap:nowrap;">
+              <div class="qctrl"><button class="qbtn" onclick="changeQty('${p.id}',-1)">−</button><span class="qval" id="qty-${p.id}">${p.minQty||1}</span><button class="qbtn" onclick="changeQty('${p.id}',1)">+</button></div>
+              <button class="btn-atc" id="atc-${p.id}" onclick="addToCart('${p.id}')">Add</button>
             </div>
-            <button class="btn-atc" id="atc-${p.id}" onclick="addToCart('${p.id}')">Add to Cart</button>
+          </td>
+        </tr>`;
+      });
+      html += '</tbody></table></div>';
+    } else {
+      // Grid view
+      html += `<div class="pgrid" id="pub-pgrid">`;
+      d.products.forEach(p => {
+        const discounted = p.discPrice && p.salePrice && p.discPrice < p.salePrice;
+        const displayPrice = p.discPrice || p.salePrice;
+        const discPct = discounted ? Math.round((1 - p.discPrice / p.salePrice) * 100) : 0;
+        let customHtml = '';
+        if (visibleFields.length) {
+          visibleFields.forEach(f => {
+            const fval = f.formula ? evalFormulaField(f.formula, p, schema) : p[f.key];
+            const sc = schema[f.key];
+            if (fval !== null && fval !== undefined && fval !== '') {
+              const label = sc ? sc.name : f.key;
+              const disp = sc && sc.type === 'number' && sc.decimals ? Number(fval).toFixed(sc.decimals) : fval;
+              customHtml += `<div class="pmeta" style="font-size:10px;"><b>${label}:</b> ${disp}</div>`;
+            }
+          });
+        } else {
+          for (let i = 1; i <= 13; i++) {
+            const f = schema[`field${i}`]; const v = p[`field${i}`];
+            if (f && f.enabled && f.name && v) {
+              customHtml += `<div class="pmeta" style="font-size:10px;"><b>${f.name}:</b> ${f.type==='number'&&f.decimals ? Number(v).toFixed(f.decimals) : v}</div>`;
+            }
+          }
+        }
+        html += `
+        <div class="pcard" id="pcard-${p.id}">
+          <div class="pph">${showImages && p.imageUrl ? `<img src="${p.imageUrl}" style="width:100%;height:100%;object-fit:cover;">` : (showImages ? '📦' : '')}</div>
+          <div class="pbody">
+            <div class="pname">${p.productName || p.itemNo}</div>
+            <div class="pcode">${p.itemNo}</div>
+            ${p.category ? `<div class="pmeta">${p.category}</div>` : ''}
+            ${customHtml}
+            <div class="price-row">
+              <span class="pnow">₹${displayPrice}</span>
+              ${discounted ? `<span class="pwas">₹${p.salePrice}</span><span class="pdisc">${discPct}% off</span>` : ''}
+            </div>
+            ${p.minQty > 1 ? `<div class="pminord">Min order: ${p.minQty} ${p.unit||'pcs'}</div>` : ''}
+            <div class="qty-cart-row">
+              <div class="qctrl">
+                <button class="qbtn" onclick="changeQty('${p.id}',-1)">−</button>
+                <span class="qval" id="qty-${p.id}">${p.minQty||1}</span>
+                <button class="qbtn" onclick="changeQty('${p.id}',1)">+</button>
+              </div>
+              <button class="btn-atc" id="atc-${p.id}" onclick="addToCart('${p.id}')">Add to Cart</button>
+            </div>
           </div>
-        </div>
-      </div>`;
-    });
+        </div>`;
+      });
+      html += '</div>';
+    }
 
-    html += `</div></div>
+    html += `</div>
         <div class="cart-sidebar">
           <div class="cart-box">
             <div class="cart-hdr">

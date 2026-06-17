@@ -302,6 +302,20 @@ app.post('/api/catalogs/:catalogId/products', auth, wholesalerOnly, async (req, 
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/api/products/:id', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const p = await DB.findProduct({ id: req.params.id });
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    if (p.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    const upd = {};
+    ['itemNo','productName','imageName','imageUrl','category','minQty','unit','salePrice','description','description2']
+      .forEach(k => { if (req.body[k] !== undefined) upd[k] = req.body[k]; });
+    for (let i = 1; i <= 13; i++) { const k = `field${i}`; if (req.body[k] !== undefined) upd[k] = req.body[k]; }
+    await DB.updateProduct({ id: req.params.id }, upd);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.delete('/api/products/:id', auth, wholesalerOnly, async (req, res) => {
   try {
     const p = await DB.findProduct({ id: req.params.id });
@@ -309,6 +323,28 @@ app.delete('/api/products/:id', auth, wholesalerOnly, async (req, res) => {
     if (p.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     await DB.deleteProducts({ id: req.params.id });
     res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── IMAGE UPLOAD ──────────────────────────────────────────────────────────
+const imgUploader = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _f, cb) => { const d = path.join(__dirname,'public','uploads','images'); fs.mkdirSync(d,{recursive:true}); cb(null,d); },
+    filename: (req, _f, cb) => cb(null, req.params.id + path.extname(_f.originalname).toLowerCase()),
+  }),
+  limits: { fileSize: 5*1024*1024 },
+  fileFilter: (_req, f, cb) => cb(null, /\.(jpg|jpeg|png|gif|webp)$/i.test(f.originalname)),
+});
+
+app.post('/api/products/:id/image', auth, wholesalerOnly, imgUploader.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+  try {
+    const p = await DB.findProduct({ id: req.params.id });
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    if (p.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    const imageUrl = '/uploads/images/' + req.file.filename;
+    await DB.updateProduct({ id: req.params.id }, { imageUrl, imageName: req.file.filename });
+    res.json({ ok: true, imageUrl });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -365,7 +401,6 @@ app.post('/api/catalogs/:catalogId/upload-csv', auth, wholesalerOnly, csvUploade
       const itemNo = col(row,'itemno','item no','item code','code','sku');
       const sp = col(row,'sellingprice','selling price','saleprice','sale price','price');
       if (!itemNo) rowErrors.push('Item Code missing');
-      if (!sp||isNaN(parseFloat(sp))) rowErrors.push('Selling Price missing or invalid');
       for (let i=1;i<=13;i++) {
         const fd=schema[`field${i}`];
         if (fd&&fd.enabled&&fd.name&&fd.required&&!col(row,fd.name)) rowErrors.push(`${fd.name} is required`);
@@ -387,7 +422,7 @@ app.post('/api/catalogs/:catalogId/upload-csv', auth, wholesalerOnly, csvUploade
         category:col(row,'category','cat'),
         minQty:parseFloat(col(row,'minqty','min qty','minimumqty'))||1,
         unit:col(row,'unit')||'Pcs',
-        salePrice:parseFloat(sp), discPrice:0,
+        salePrice:sp ? parseFloat(sp) : 0, discPrice:0,
         description:col(row,'description','desc'), description2:col(row,'description2','desc2'),
         ...customFields, sourceWholesalerProductId:null, createdAt:new Date().toISOString(),
       });
@@ -400,6 +435,59 @@ app.post('/api/catalogs/:catalogId/upload-csv', auth, wholesalerOnly, csvUploade
         ? `${inserted.length} products imported${errors.length>0?` · ${errors.length} rows skipped`:''}`
         : `No products imported — ${errors.length} rows had errors`,
     });
+  } catch(err) { res.status(400).json({ error:'Parse error: '+err.message }); }
+});
+
+// ── WHOLESALER: ITEM MASTER ───────────────────────────────────────────────
+app.get('/api/wholesaler/all-items', auth, wholesalerOnly, async (req, res) => {
+  try { res.json(await DB.findProducts({ ownerId: req.user.id })); }
+  catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/wholesaler/bulk-update-csv', auth, wholesalerOnly, csvUploader.single('csv'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    let rows = [];
+    if (ext === '.csv') {
+      rows = parse(fs.readFileSync(req.file.path,'utf8'), { columns:true, skip_empty_lines:true, trim:true });
+    } else if (ext==='.xlsx'||ext==='.xls') {
+      const wb = XLSX.readFile(req.file.path);
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:'' });
+    } else { return res.status(400).json({ error: 'Please upload .csv or .xlsx' }); }
+
+    const col = (row,...keys) => {
+      for (const k of keys) {
+        const found = Object.keys(row).find(rk => rk.toLowerCase().replace(/[\s*_()]/g,'').startsWith(k.toLowerCase().replace(/[\s*_()]/g,'')));
+        if (found && String(row[found]).trim()!=='') return String(row[found]).trim();
+      }
+      return '';
+    };
+
+    const wholesalerUser = await DB.findUser({ id: req.user.id });
+    const schema = wholesalerUser.fieldSchema || defaultFieldSchema();
+    let updated=0, errors=[];
+    for (const [idx, row] of rows.entries()) {
+      const itemNo = col(row,'itemno','item no','item code','code','sku');
+      if (!itemNo) { errors.push({row:idx+2,error:'Item Code missing'}); continue; }
+      const existing = await DB.findProduct({ ownerId: req.user.id, itemNo });
+      if (!existing) { errors.push({row:idx+2,error:`Item ${itemNo} not found`}); continue; }
+      const upd = {};
+      const name=col(row,'productname','product name','item name','name'); if(name) upd.productName=name;
+      const cat=col(row,'category','cat'); if(cat) upd.category=cat;
+      const sp=col(row,'sellingprice','selling price','saleprice','sale price','price'); if(sp&&!isNaN(parseFloat(sp))) upd.salePrice=parseFloat(sp);
+      const mq=col(row,'minqty','min qty'); if(mq) upd.minQty=parseFloat(mq)||1;
+      const unit=col(row,'unit'); if(unit) upd.unit=unit;
+      const desc=col(row,'description','desc'); if(desc) upd.description=desc;
+      for (let i=1;i<=13;i++) {
+        const k=`field${i}`,fd=schema[k];
+        if (fd&&fd.enabled&&fd.name) { const raw=col(row,fd.name); if(raw!=='') upd[k]=fd.type==='number'?(parseFloat(raw)||0):raw; }
+      }
+      await DB.updateProduct({ id: existing.id }, upd);
+      updated++;
+    }
+    res.json({ ok:true, updated, errorCount:errors.length, errors,
+      message:`${updated} items updated${errors.length>0?` · ${errors.length} rows skipped`:''}` });
   } catch(err) { res.status(400).json({ error:'Parse error: '+err.message }); }
 });
 

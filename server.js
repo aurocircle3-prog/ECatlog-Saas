@@ -271,6 +271,22 @@ app.put('/api/wholesaler/field-schema', auth, wholesalerOnly, async (req, res) =
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/wholesaler/display-format', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const user = await DB.findUser({ id: req.user.id });
+    res.json(user && user.displayFormat ? user.displayFormat : {});
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/wholesaler/display-format', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const { displayFormat } = req.body;
+    if (!displayFormat) return res.status(400).json({ error: 'displayFormat required' });
+    await DB.updateUser({ id: req.user.id }, { displayFormat });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/field-schema/:wholesalerId', async (req, res) => {
   try {
     const user = await DB.findUser({ id: req.params.wholesalerId });
@@ -805,13 +821,16 @@ app.get('/api/public/:userId/:slug', async (req, res) => {
     }
 
     let schema = defaultFieldSchema();
+    let wholesalerUser = owner;
     if (owner.role==='reseller'&&owner.wholesalerId) {
       const w = await DB.findUser({ id:owner.wholesalerId });
-      if (w) schema = w.fieldSchema||defaultFieldSchema();
+      if (w) { schema = w.fieldSchema||defaultFieldSchema(); wholesalerUser = w; }
     } else if (owner.role==='wholesaler') {
       schema = owner.fieldSchema||defaultFieldSchema();
     }
-    res.json({ catalog:cat, owner:safeUser(owner), products, schema, displayFormat: df });
+    // Use wholesaler's global display format (overrides per-catalog)
+    const displayFormat = wholesalerUser.displayFormat || df;
+    res.json({ catalog:cat, owner:safeUser(owner), products, schema, displayFormat });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

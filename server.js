@@ -294,6 +294,83 @@ app.get('/api/catalogs/:catalogId/products', auth, async (req, res) => {
   catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Standalone item creation (Item Master — not tied to a catalog)
+app.post('/api/wholesaler/items', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const { itemNo, productName, imageName, category, minQty, unit, salePrice, description, description2 } = req.body;
+    if (!itemNo) return res.status(400).json({ error: 'itemNo required' });
+    const customFields = {};
+    for (let i = 1; i <= 13; i++) { const k = `field${i}`; customFields[k] = req.body[k] !== undefined ? req.body[k] : ''; }
+    const p = { id: uuid(), catalogId: null, ownerId: req.user.id,
+      itemNo, productName: productName||itemNo, imageName: imageName||'',
+      category: category||'', minQty: Number(minQty)||1, unit: unit||'Pcs',
+      salePrice: Number(salePrice)||0, discPrice: 0,
+      description: description||'', description2: description2||'',
+      ...customFields, sourceWholesalerProductId: null, createdAt: new Date().toISOString() };
+    await DB.createProduct(p);
+    res.json(p);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Item Master CSV import (no catalog required)
+app.post('/api/wholesaler/items/import-csv', auth, wholesalerOnly, csvUploader.single('csv'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    let rows = [];
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    if (ext === '.csv') {
+      rows = parse(fs.readFileSync(req.file.path,'utf8'), { columns:true, skip_empty_lines:true, trim:true });
+    } else if (ext==='.xlsx'||ext==='.xls') {
+      const wb = XLSX.readFile(req.file.path);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
+    } else { return res.status(400).json({ error: 'Please upload .csv or .xlsx' }); }
+    if (!rows.length) return res.status(400).json({ error: 'File is empty' });
+
+    const col = (row,...keys) => {
+      for (const k of keys) {
+        const found = Object.keys(row).find(rk => rk.toLowerCase().replace(/[\s*_()]/g,'').startsWith(k.toLowerCase().replace(/[\s*_()]/g,'')));
+        if (found && String(row[found]).trim()!=='') return String(row[found]).trim();
+      }
+      return '';
+    };
+
+    const wholesalerUser = await DB.findUser({ id: req.user.id });
+    const schema = (wholesalerUser && wholesalerUser.fieldSchema) || defaultFieldSchema();
+    let inserted=[], errors=[];
+    rows.forEach((row,idx) => {
+      const rowNum=idx+2, rowErrors=[];
+      const itemNo = col(row,'itemno','item no','item code','code','sku');
+      if (!itemNo) rowErrors.push('Item Code missing');
+      for (let i=1;i<=13;i++) {
+        const fd=schema[`field${i}`];
+        if (fd&&fd.enabled&&fd.name&&fd.required&&!col(row,fd.name)) rowErrors.push(`${fd.name} is required`);
+      }
+      if (rowErrors.length) { errors.push({row:rowNum,itemNo:itemNo||'(blank)',errors:rowErrors}); return; }
+      const customFields={};
+      for (let i=1;i<=13;i++) {
+        const k=`field${i}`,fd=schema[k];
+        customFields[k] = fd&&fd.enabled&&fd.name ? (fd.type==='number'?(parseFloat(col(row,fd.name))||0):col(row,fd.name)) : '';
+      }
+      const sp = col(row,'sellingprice','selling price','saleprice','sale price','price');
+      inserted.push({
+        id:uuid(), catalogId:null, ownerId:req.user.id,
+        itemNo, productName:col(row,'productname','product name','item name','name')||itemNo,
+        imageName:col(row,'imagename','image name','image','img')||'',
+        category:col(row,'category','cat'),
+        minQty:parseFloat(col(row,'minqty','min qty','minimumqty'))||1,
+        unit:col(row,'unit')||'Pcs',
+        salePrice:sp?parseFloat(sp):0, discPrice:0,
+        description:col(row,'description','desc'), description2:col(row,'description2','desc2'),
+        ...customFields, sourceWholesalerProductId:null, createdAt:new Date().toISOString(),
+      });
+    });
+    if (inserted.length>0) await DB.bulkCreateProducts(inserted);
+    res.json({ ok:inserted.length>0, count:inserted.length, errorCount:errors.length, errors,
+      message:inserted.length>0?`${inserted.length} items imported${errors.length>0?` · ${errors.length} rows skipped`:''}`:`No items imported — ${errors.length} rows had errors` });
+  } catch(err) { res.status(400).json({ error:'Parse error: '+err.message }); }
+});
+
 app.post('/api/catalogs/:catalogId/products', auth, wholesalerOnly, async (req, res) => {
   try {
     const cat = await DB.findCatalog({ id: req.params.catalogId });
@@ -666,16 +743,14 @@ app.delete('/api/admin/wholesalers/:id', auth, adminOnly, async (req, res) => {
     const w = await DB.findUser({ id: wId, role: 'wholesaler' });
     if (!w) return res.status(404).json({ error: 'Wholesaler not found' });
 
-    // Cascade delete all wholesaler data
-    const cats = await DB.findCatalogs({ ownerId: wId });
-    for (const c of cats) await DB.deleteProducts({ catalogId: c.id });
+    // Cascade delete all wholesaler data (ownerId covers both catalog & standalone items)
+    await DB.deleteProducts({ ownerId: wId });
     await DB.deleteCatalogs({ ownerId: wId });
 
-    // Reseller-owned products & catalogs (resellers linked to this wholesaler)
+    // Resellers linked to this wholesaler
     const resellers = await DB.findUsers({ wholesalerId: wId, role: 'reseller' });
     for (const r of resellers) {
-      const rCats = await DB.findCatalogs({ ownerId: r.id });
-      for (const c of rCats) await DB.deleteProducts({ catalogId: c.id });
+      await DB.deleteProducts({ ownerId: r.id });
       await DB.deleteCatalogs({ ownerId: r.id });
       await DB.deleteOrders({ ownerId: r.id });
     }

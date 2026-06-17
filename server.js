@@ -305,8 +305,72 @@ app.post('/api/catalogs', auth, async (req, res) => {
 
 // ── PRODUCTS ──────────────────────────────────────────────────────────────
 app.get('/api/catalogs/:catalogId/products', auth, async (req, res) => {
-  try { res.json(await DB.findProducts({ catalogId: req.params.catalogId })); }
+  try {
+    const cat = await DB.findCatalog({ id: req.params.catalogId });
+    if (!cat) return res.status(404).json({ error: 'Catalog not found' });
+    // New catalog system: itemIds array links to Item Master
+    if (cat.itemIds && cat.itemIds.length) {
+      const all = [];
+      for (const iid of cat.itemIds) {
+        const p = await DB.findProduct({ id: iid, ownerId: cat.ownerId });
+        if (p && p.active !== false) all.push(p);
+      }
+      return res.json(all);
+    }
+    // Legacy: products stored with catalogId
+    res.json(await DB.findProducts({ catalogId: req.params.catalogId }));
+  }
   catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── CATALOG ITEM MANAGEMENT ───────────────────────────────────────────────
+// POST /api/catalogs/:id/items — link Item Master items to catalog
+app.post('/api/catalogs/:id/items', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const cat = await DB.findCatalog({ id: req.params.id });
+    if (!cat) return res.status(404).json({ error: 'Catalog not found' });
+    if (cat.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    const { itemIds } = req.body;
+    if (!Array.isArray(itemIds)) return res.status(400).json({ error: 'itemIds array required' });
+    const existing = cat.itemIds || [];
+    const merged = Array.from(new Set([...existing, ...itemIds]));
+    await DB.updateCatalog({ id: req.params.id }, { itemIds: merged });
+    res.json({ ok: true, itemIds: merged });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/catalogs/:catalogId/items/:itemId — remove item from catalog
+app.delete('/api/catalogs/:catalogId/items/:itemId', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const cat = await DB.findCatalog({ id: req.params.catalogId });
+    if (!cat) return res.status(404).json({ error: 'Catalog not found' });
+    if (cat.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    const itemIds = (cat.itemIds || []).filter(id => id !== req.params.itemId);
+    await DB.updateCatalog({ id: req.params.catalogId }, { itemIds });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/catalogs/:catalogId/display-format — save display format
+app.put('/api/catalogs/:catalogId/display-format', auth, wholesalerOnly, async (req, res) => {
+  try {
+    const cat = await DB.findCatalog({ id: req.params.catalogId });
+    if (!cat) return res.status(404).json({ error: 'Catalog not found' });
+    if (cat.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    const { displayFormat } = req.body;
+    if (!displayFormat) return res.status(400).json({ error: 'displayFormat required' });
+    await DB.updateCatalog({ id: req.params.catalogId }, { displayFormat });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/catalogs/:catalogId/display-format — get display format
+app.get('/api/catalogs/:catalogId/display-format', auth, async (req, res) => {
+  try {
+    const cat = await DB.findCatalog({ id: req.params.catalogId });
+    if (!cat) return res.status(404).json({ error: 'Catalog not found' });
+    res.json(cat.displayFormat || {});
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // Standalone item creation (Item Master — not tied to a catalog)
@@ -368,7 +432,7 @@ app.post('/api/wholesaler/items/import-csv', auth, wholesalerOnly, csvUploader.s
         const k=`field${i}`,fd=schema[k];
         customFields[k] = fd&&fd.enabled&&fd.name ? (fd.type==='number'?(parseFloat(col(row,fd.name))||0):col(row,fd.name)) : '';
       }
-      const sp = col(row,'sellingprice','selling price','saleprice','sale price','price');
+      const sp = col(row,'wsp','wholesalersellingprice','sellingprice','selling price','saleprice','sale price','price');
       const activeVal = col(row,'active');
       const isActive = activeVal === '' || activeVal.toLowerCase() === 'yes' || activeVal.toLowerCase() === 'true' || activeVal === '1';
       inserted.push({
@@ -523,7 +587,7 @@ app.post('/api/catalogs/:catalogId/upload-csv', auth, wholesalerOnly, csvUploade
     rows.forEach((row,idx) => {
       const rowNum=idx+2, rowErrors=[];
       const itemNo = col(row,'itemno','item no','item code','code','sku');
-      const sp = col(row,'sellingprice','selling price','saleprice','sale price','price');
+      const sp = col(row,'wsp','wholesalersellingprice','sellingprice','selling price','saleprice','sale price','price');
       if (!itemNo) rowErrors.push('Item Code missing');
       for (let i=1;i<=13;i++) {
         const fd=schema[`field${i}`];
@@ -704,7 +768,42 @@ app.get('/api/public/:userId/:slug', async (req, res) => {
     if (!owner) return res.status(404).json({ error:'Not found' });
     const cat = await DB.findCatalog({ ownerId:owner.id, slug:req.params.slug });
     if (!cat) return res.status(404).json({ error:'Catalog not found' });
-    const products = await DB.findProducts({ catalogId:cat.id });
+
+    let products = [];
+    if (cat.itemIds && cat.itemIds.length) {
+      // New system: resolve from Item Master, exclude inactive
+      for (const iid of cat.itemIds) {
+        const p = await DB.findProduct({ id: iid, ownerId: owner.id });
+        if (p && p.active !== false) products.push(p);
+      }
+    } else {
+      // Legacy: products stored with catalogId
+      products = (await DB.findProducts({ catalogId:cat.id })).filter(p => p.active !== false);
+    }
+
+    // Apply formula fields if displayFormat present
+    const df = cat.displayFormat || {};
+    if (df.fields && df.fields.length) {
+      products = products.map(p => {
+        const out = { ...p };
+        df.fields.forEach(fld => {
+          if (fld.formula && fld.show !== false) {
+            try {
+              const expr = fld.formula.replace(/\{([^}]+)\}/g, (_, name) => {
+                // find field key by label
+                const entry = Object.entries(out).find(([k, v]) => k === name || String(v) === name);
+                if (entry) return Number(entry[1]) || 0;
+                // also try matching against schema field names
+                return 0;
+              });
+              out[fld.key + '_computed'] = eval(expr); // eslint-disable-line no-eval
+            } catch(e2) { /* skip bad formula */ }
+          }
+        });
+        return out;
+      });
+    }
+
     let schema = defaultFieldSchema();
     if (owner.role==='reseller'&&owner.wholesalerId) {
       const w = await DB.findUser({ id:owner.wholesalerId });
@@ -712,7 +811,7 @@ app.get('/api/public/:userId/:slug', async (req, res) => {
     } else if (owner.role==='wholesaler') {
       schema = owner.fieldSchema||defaultFieldSchema();
     }
-    res.json({ catalog:cat, owner:safeUser(owner), products, schema });
+    res.json({ catalog:cat, owner:safeUser(owner), products, schema, displayFormat: df });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

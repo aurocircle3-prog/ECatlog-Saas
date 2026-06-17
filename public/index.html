@@ -861,6 +861,7 @@ function renderItemMasterTable(items, schema, cats) {
         <th style="width:60px;">Image</th>
         <th>Item Code</th><th>Name</th><th>Category</th><th>Price</th>
         ${customCols.map(c => `<th>${c.name}</th>`).join('')}
+        <th style="width:70px;">Active</th>
         <th style="width:100px;">Actions</th>
       </tr></thead>
       <tbody id="im-tbody">
@@ -884,6 +885,7 @@ function renderImRows(items, customCols) {
       <td>${p.category||'-'}</td>
       <td>₹${p.salePrice||0}</td>
       ${customTds}
+      <td><span class="badge ${p.active===false?'bg-red':'bg-green'}" style="cursor:pointer;" onclick="toggleActive('${p.id}',${p.active!==false})">${p.active===false?'No':'Yes'}</span></td>
       <td><button class="btn-green-sm" onclick="openEditItem('${p.id}')">Edit</button> <button class="btn-danger-sm" onclick="deleteItem('${p.id}')">Del</button></td>
     </tr>`;
   }).join('');
@@ -939,7 +941,10 @@ function showImAddItem() {
       <div class="fgd"><label>Category</label><input class="inp inp-full" id="im-add-category" placeholder="Category"></div>
       <div class="fgd"><label>Selling Price</label><input class="inp inp-full" id="im-add-salePrice" type="number" placeholder="0.00"></div>
     </div>
-    <div class="fgd"><label>Image</label><input type="file" class="inp inp-full" id="im-add-image" accept="image/*"></div>
+    <div class="frow">
+      <div class="fgd"><label>Image</label><input type="file" class="inp inp-full" id="im-add-image" accept="image/*"></div>
+      <div class="fgd"><label>Active</label><select class="inp inp-full" id="im-add-active"><option value="true" selected>Yes</option><option value="false">No</option></select></div>
+    </div>
     ${customHtml}
     <div style="margin-top:14px;"><button class="btn btn-dark btn-sm" onclick="btnAction(this,submitAddItem)">Add Item</button></div>
   </div>`;
@@ -957,6 +962,7 @@ function submitAddItem() {
     itemNo, productName: document.getElementById('im-add-productName')?.value||'',
     category: document.getElementById('im-add-category')?.value||'',
     salePrice: document.getElementById('im-add-salePrice')?.value||0,
+    active: document.getElementById('im-add-active')?.value !== 'false',
   };
   for (let i = 1; i <= 13; i++) {
     const f = schema[`field${i}`];
@@ -1019,6 +1025,7 @@ function openEditItem(id) {
           <div class="fgd"><label>Category</label><input class="inp inp-full" id="eim-category" value="${p.category||''}"></div>
           <div class="fgd"><label>Selling Price</label><input class="inp inp-full" id="eim-salePrice" type="number" value="${p.salePrice||0}"></div>
         </div>
+        <div class="fgd"><label>Active</label><select class="inp" id="eim-active" style="width:160px;"><option value="true" ${p.active!==false?'selected':''}>Yes</option><option value="false" ${p.active===false?'selected':''}>No</option></select></div>
         ${customHtml}
       </div>
       <div style="flex-shrink:0;">
@@ -1045,6 +1052,7 @@ function saveItemEdit(id) {
     productName: document.getElementById('eim-productName')?.value||'',
     category: document.getElementById('eim-category')?.value||'',
     salePrice: document.getElementById('eim-salePrice')?.value||0,
+    active: document.getElementById('eim-active')?.value !== 'false',
   };
   if (!body.itemNo) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code required.</div>'; return Promise.resolve(); }
   for (let i = 1; i <= 13; i++) {
@@ -1073,6 +1081,19 @@ function uploadItemImage(id) {
   }).catch(e => { msgEl.innerHTML = `<span style="color:#c0392b;">${e.message}</span>`; });
 }
 
+function toggleActive(id, currentlyActive) {
+  const newActive = !currentlyActive;
+  api('PUT', `/api/products/${id}`, { active: newActive }).then(() => {
+    const item = __itemMasterData.find(x => x.id === id);
+    if (item) item.active = newActive;
+    const customCols = [];
+    for (let i = 1; i <= 13; i++) { const f = __itemMasterSchema[`field${i}`]; if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, ...f }); }
+    const tb = document.getElementById('im-tbody');
+    if (tb) tb.innerHTML = renderImRows(__itemMasterData, customCols);
+    toast(newActive ? 'Item set Active' : 'Item set Inactive');
+  }).catch(e => toast(e.message, true));
+}
+
 function deleteItem(id) {
   if (!confirm('Delete this item?')) return;
   api('DELETE', `/api/products/${id}`).then(() => {
@@ -1088,10 +1109,11 @@ function downloadItemsCsv() {
     const f = schema[`field${i}`];
     if (f && f.enabled && f.name) customCols.push({ key: `field${i}`, name: f.name });
   }
-  const headers = ['Item Code','Item Name','Category','Selling Price','Min Qty','Unit', ...customCols.map(c => c.name)];
+  const headers = ['Item Code','Item Name','Category','Selling Price','Min Qty','Unit', ...customCols.map(c => c.name), 'Active'];
   const rows = __itemMasterData.map(p => [
     p.itemNo, p.productName||'', p.category||'', p.salePrice||0, p.minQty||1, p.unit||'Pcs',
-    ...customCols.map(c => p[c.key]||'')
+    ...customCols.map(c => p[c.key]||''),
+    p.active === false ? 'No' : 'Yes'
   ]);
   const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
@@ -1281,7 +1303,7 @@ function saveFieldSettings() {
 
 function downloadCsvTemplate() {
   const schema = window.__fieldSchema || {};
-  const fixed = ['Item Code', 'Item Name', 'Image Name'];
+  const fixed = ['Item Code', 'Item Name', 'Image Name', 'Active'];
   const custom = [];
   for (let i = 1; i <= 13; i++) {
     const f = schema[`field${i}`];

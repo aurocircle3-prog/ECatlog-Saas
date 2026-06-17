@@ -416,7 +416,7 @@ app.put('/api/products/:id', auth, wholesalerOnly, async (req, res) => {
     if (!p) return res.status(404).json({ error: 'Not found' });
     if (p.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     const upd = {};
-    ['itemNo','productName','imageName','imageUrl','category','minQty','unit','salePrice','description','description2','active']
+    ['itemNo','productName','imageName','imageUrl','image1Url','image2Url','image3Url','image4Url','category','minQty','unit','salePrice','description','description2','active']
       .forEach(k => { if (req.body[k] !== undefined) upd[k] = req.body[k]; });
     for (let i = 1; i <= 13; i++) { const k = `field${i}`; if (req.body[k] !== undefined) upd[k] = req.body[k]; }
     await DB.updateProduct({ id: req.params.id }, upd);
@@ -467,9 +467,16 @@ app.post('/api/products/:id/image', auth, wholesalerOnly, imgUploader.single('im
     const p = await DB.findProduct({ id: req.params.id });
     if (!p) return res.status(404).json({ error: 'Not found' });
     if (p.ownerId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-    const imageUrl = await saveImage(req.params.id, req.file.buffer, req.file.originalname);
-    await DB.updateProduct({ id: req.params.id }, { imageUrl, imageName: req.file.originalname });
-    res.json({ ok: true, imageUrl });
+    const slot = parseInt(req.body.slot) || 0;
+    // Use imageName for Cloudinary public_id so files are named consistently
+    const baseName = (p.imageName || p.itemNo || req.params.id).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const publicId = slot === 0 ? baseName : `${baseName}_${slot}`;
+    const imageUrl = await saveImage(publicId, req.file.buffer, req.file.originalname);
+    const updateFields = slot === 0
+      ? { imageUrl, imageName: p.imageName || baseName }
+      : { [`image${slot}Url`]: imageUrl };
+    await DB.updateProduct({ id: req.params.id }, updateFields);
+    res.json({ ok: true, imageUrl, slot });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

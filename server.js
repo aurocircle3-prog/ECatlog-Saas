@@ -436,19 +436,21 @@ app.delete('/api/products/:id', auth, wholesalerOnly, async (req, res) => {
 
 // ── IMAGE UPLOAD ──────────────────────────────────────────────────────────
 async function saveImage(productId, fileBuffer, originalName) {
-  if (CLOUDINARY_URL) {
-    // Upload to Cloudinary
-    const cloudinary = require('cloudinary').v2;
-    // CLOUDINARY_URL format: cloudinary://api_key:api_secret@cloud_name
-    cloudinary.config({ cloudinary_url: CLOUDINARY_URL });
-    const result = await new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        { public_id: `ecatlog/${productId}`, overwrite: true, resource_type: 'image' },
-        (err, res) => err ? reject(err) : resolve(res)
-      );
-      stream.end(fileBuffer);
-    });
-    return result.secure_url;
+  if (CLOUDINARY_URL && CLOUDINARY_URL.startsWith('cloudinary://')) {
+    try {
+      const cloudinary = require('cloudinary').v2;
+      cloudinary.config({ cloudinary_url: CLOUDINARY_URL });
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { public_id: `ecatlog/${productId}`, overwrite: true, resource_type: 'image' },
+          (err, res) => err ? reject(err) : resolve(res)
+        );
+        stream.end(fileBuffer);
+      });
+      return result.secure_url;
+    } catch(e) {
+      console.error('Cloudinary upload failed, falling back to filesystem:', e.message);
+    }
   }
   // Fallback: save to filesystem (not persistent on Render free tier)
   const ext = path.extname(originalName).toLowerCase();

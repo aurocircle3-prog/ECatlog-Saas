@@ -347,6 +347,14 @@ function api(method, url, body, isForm) {
 
 function val(id) { return (document.getElementById(id) || {}).value || ''; }
 
+// Disable a button while async work runs, re-enable after
+function btnAction(btn, fn) {
+  const b = typeof btn === 'string' ? document.getElementById(btn) : btn;
+  const orig = b ? b.innerHTML : '';
+  if (b) { b.disabled = true; b.innerHTML = '<span style="opacity:0.7;">Please wait…</span>'; }
+  return Promise.resolve().then(fn).finally(() => { if (b) { b.disabled = false; b.innerHTML = orig; } });
+}
+
 function toast(msg, isErr) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -383,6 +391,7 @@ function render() {
   document.getElementById('nav-user-name').textContent = USER.firmName || USER.userId;
   document.getElementById('nav-role-badge').textContent = USER.role.toUpperCase();
   __loadedTabs = {};
+  window.__fieldSchema = null; window.__itemMasterSchema = {}; __itemMasterData = [];
   if (USER.role === 'wholesaler') renderWholesalerDash();
   else if (USER.role === 'reseller') renderResellerDash();
   else if (USER.role === 'admin') renderAdminDash();
@@ -445,7 +454,7 @@ function renderLogin() {
       <div id="li-err" class="err-msg"></div>
       <div class="fg"><label>User ID</label><input id="li-userId" placeholder="Enter your user ID"></div>
       <div class="fg"><label>Password</label><input id="li-password" type="password" placeholder="Enter your password"></div>
-      <button class="btn btn-dark" onclick="doLogin()">Sign In</button>
+      <button class="btn btn-dark" id="btn-login" onclick="btnAction(this,doLogin)">Sign In</button>
       <div class="auth-alt" style="margin-top:10px;">Admin login: <b>admin</b> / <b>admin123</b></div>
     </div>
     <div id="auth-tab-register" style="display:none">
@@ -460,7 +469,7 @@ function renderLogin() {
         <div class="fg"><label>Contact Person *</label><input id="rw-contactPerson" placeholder="Name"></div>
         <div class="fg"><label>Email *</label><input id="rw-email" type="email" placeholder="Email address"></div>
       </div>
-      <button class="btn btn-dark" onclick="doRegisterWholesaler()">Create Account</button>
+      <button class="btn btn-dark" onclick="btnAction(this,doRegisterWholesaler)">Create Account</button>
     </div>
   </div>`;
 }
@@ -475,7 +484,7 @@ function showAuthTab(tab) {
 function doLogin() {
   const errEl = document.getElementById('li-err');
   errEl.style.display = 'none';
-  api('POST', '/api/login', { userId: val('li-userId'), password: val('li-password') })
+  return api('POST', '/api/login', { userId: val('li-userId'), password: val('li-password') })
     .then(d => {
       TOKEN = d.token; USER = d.user;
       localStorage.setItem('wrs_token', TOKEN);
@@ -488,7 +497,7 @@ function doLogin() {
 function doRegisterWholesaler() {
   const errEl = document.getElementById('rw-err');
   errEl.style.display = 'none';
-  api('POST', '/api/register', {
+  return api('POST', '/api/register', {
     userId: val('rw-userId'), password: val('rw-password'),
     firmName: val('rw-firmName'), contactPerson: val('rw-contactPerson'),
     email: val('rw-email'), role: 'wholesaler'
@@ -519,7 +528,7 @@ function renderResellerSignup(slug) {
       <div class="fg"><label>Contact Person *</label><input id="rs-contactPerson" placeholder="Name"></div>
       <div class="fg"><label>Email *</label><input id="rs-email" type="email" placeholder="Email address"></div>
     </div>
-    <button class="btn btn-dark" onclick="doRegisterReseller('${slug}')">Sign Up as Reseller</button>
+    <button class="btn btn-dark" onclick="btnAction(this,()=>doRegisterReseller('${slug}'))">Sign Up as Reseller</button>
     <div class="auth-alt" style="margin-top:10px;"><a onclick="history.pushState({},'','/');render()">← Back to Login</a></div>
   </div>`;
 }
@@ -527,7 +536,7 @@ function renderResellerSignup(slug) {
 function doRegisterReseller(slug) {
   const errEl = document.getElementById('rs-err');
   errEl.style.display = 'none';
-  api('POST', '/api/register', {
+  return api('POST', '/api/register', {
     userId: val('rs-userId'), password: val('rs-password'),
     firmName: val('rs-firmName'), contactPerson: val('rs-contactPerson'),
     email: val('rs-email'), role: 'reseller', wholesalerSlug: slug
@@ -931,7 +940,7 @@ function showImAddItem() {
       <div class="fgd"><label>Image</label><input type="file" class="inp inp-full" id="im-add-image" accept="image/*"></div>
     </div>
     ${customHtml}
-    <div style="margin-top:14px;"><button class="btn btn-dark btn-sm" onclick="submitAddItem()">Add Item</button></div>
+    <div style="margin-top:14px;"><button class="btn btn-dark btn-sm" onclick="btnAction(this,submitAddItem)">Add Item</button></div>
   </div>`;
 }
 
@@ -942,8 +951,8 @@ function submitAddItem() {
   msgEl.innerHTML = '';
   const catId = document.getElementById('im-add-catId')?.value;
   const itemNo = document.getElementById('im-add-itemNo')?.value?.trim();
-  if (!catId) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Select a catalog.</div>'; return; }
-  if (!itemNo) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code is required.</div>'; return; }
+  if (!catId) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Select a catalog.</div>'; return Promise.resolve(); }
+  if (!itemNo) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code is required.</div>'; return Promise.resolve(); }
   const schema = __itemMasterSchema;
   const body = {
     itemNo, productName: document.getElementById('im-add-productName')?.value||'',
@@ -1022,7 +1031,7 @@ function openEditItem(id) {
       </div>
     </div>
     <div style="margin-top:16px;display:flex;gap:10px;">
-      <button class="btn btn-dark btn-sm" onclick="saveItemEdit('${p.id}')">Save Changes</button>
+      <button class="btn btn-dark btn-sm" onclick="btnAction(this,()=>saveItemEdit('${p.id}'))">Save Changes</button>
     </div>
   </div>`;
   panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1038,7 +1047,7 @@ function saveItemEdit(id) {
     category: document.getElementById('eim-category')?.value||'',
     salePrice: document.getElementById('eim-salePrice')?.value||0,
   };
-  if (!body.itemNo) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code required.</div>'; return; }
+  if (!body.itemNo) { msgEl.innerHTML = '<div class="err-msg" style="display:block;">Item Code required.</div>'; return Promise.resolve(); }
   for (let i = 1; i <= 13; i++) {
     const f = schema[`field${i}`];
     if (f && f.enabled && f.name) { const el = document.getElementById(`eim-field${i}`); if (el) body[`field${i}`] = el.value; }
@@ -1225,7 +1234,7 @@ function loadFieldSettings() {
         </table>
       </div>
       <div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-        <button class="btn btn-dark btn-sm" onclick="saveFieldSettings()">Save Settings</button>
+        <button class="btn btn-dark btn-sm" onclick="btnAction(this,saveFieldSettings)">Save Settings</button>
         <button class="btn btn-outline btn-sm" onclick="downloadCsvTemplate()">Download CSV Template</button>
         <span id="fs-save-msg" style="font-size:12px;color:#16a34a;display:none;">✓ Saved!</span>
       </div>
@@ -1234,9 +1243,9 @@ function loadFieldSettings() {
 }
 
 function saveFieldSettings() {
-  const schema = {};
+  const newSchema = {};
   for (let i = 1; i <= 13; i++) {
-    schema[`field${i}`] = {
+    newSchema[`field${i}`] = {
       name: (document.getElementById(`fs-name-${i}`)?.value || '').trim(),
       type: document.getElementById(`fs-type-${i}`)?.value || 'text',
       required: document.getElementById(`fs-req-${i}`)?.checked || false,
@@ -1244,17 +1253,44 @@ function saveFieldSettings() {
       enabled: document.getElementById(`fs-en-${i}`)?.checked || false,
     };
   }
-  api('PUT', '/api/wholesaler/field-schema', { schema }).then(() => {
-    window.__fieldSchema = schema;
-    const msg = document.getElementById('fs-save-msg');
-    if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
-    toast('Field settings saved!');
-  }).catch(e => toast(e.message, true));
+
+  // Check for renames that would relabel existing product data
+  const doSave = () => {
+    api('PUT', '/api/wholesaler/field-schema', { schema: newSchema }).then(() => {
+      window.__fieldSchema = newSchema;
+      __itemMasterSchema = newSchema;
+      const msg = document.getElementById('fs-save-msg');
+      if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
+      toast('Field settings saved!');
+    }).catch(e => toast(e.message, true));
+  };
+
+  const oldSchema = window.__fieldSchema || {};
+  const renames = [];
+  for (let i = 1; i <= 13; i++) {
+    const k = `field${i}`, o = oldSchema[k], n = newSchema[k];
+    if (o && n && o.name && n.name && o.name !== n.name) renames.push({ i, k, oldName: o.name, newName: n.name });
+  }
+  if (!renames.length) { doSave(); return; }
+
+  // Fetch items to count affected products
+  api('GET', '/api/wholesaler/all-items').then(items => {
+    const warnings = renames.map(r => {
+      const count = items.filter(p => p[r.k] !== undefined && String(p[r.k]).trim() !== '').length;
+      return count > 0 ? `• Field ${r.i}: "${r.oldName}" → "${r.newName}" — ${count} item(s) have data that will be relabeled` : null;
+    }).filter(Boolean);
+
+    if (warnings.length) {
+      const proceed = confirm(`⚠️ Renaming warning:\n\n${warnings.join('\n')}\n\nThe data stays intact but will appear under the new field name.\nContinue?`);
+      if (!proceed) return;
+    }
+    doSave();
+  }).catch(() => doSave()); // if fetch fails, save anyway
 }
 
 function downloadCsvTemplate() {
   const schema = window.__fieldSchema || {};
-  const fixed = ['Item Code', 'Item Name', 'Image Name', 'Category'];
+  const fixed = ['Item Code', 'Item Name', 'Image Name'];
   const custom = [];
   for (let i = 1; i <= 13; i++) {
     const f = schema[`field${i}`];
@@ -1275,7 +1311,17 @@ function loadWResellers() {
   el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading...</div>';
   api('GET', '/api/wholesaler/resellers').then(rs => {
     const pending = rs.filter(r => r.status === 'pending').length;
-    let html = `<div class="sec-hdr"><div><div class="sec-title">Resellers</div><div class="sec-sub">${rs.length} total · ${pending} pending approval</div></div></div>`;
+    const slug = USER.slug || USER.userId;
+    let html = `
+    <div class="sec-hdr"><div><div class="sec-title">Resellers</div><div class="sec-sub">${rs.length} total · ${pending} pending approval</div></div></div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title">Reseller Signup Link</div>
+      <div class="link-box">
+        <span class="link-url">${location.origin}/w/${slug}/signup</span>
+        <button class="btn btn-outline btn-sm" onclick="copyLink('/w/${slug}/signup')">Copy</button>
+      </div>
+      <div style="font-size:11px;color:#888;">Share this with resellers to let them join under your account.</div>
+    </div>`;
     if (!rs.length) {
       html += '<div class="card" style="text-align:center;padding:40px;color:#bbb;">No resellers yet. Share your signup link from the Catalogs tab.</div>';
     } else {
